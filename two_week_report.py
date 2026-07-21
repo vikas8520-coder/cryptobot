@@ -11,6 +11,7 @@ IDEMPOTENT via a .done marker so a refire is a no-op, and (b) cleans up in the r
 order — remove the plist FIRST, then bootout last (nothing needs to run after).
 """
 import requests, re, json, os, subprocess
+from local_secrets import api_pw
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
 
@@ -26,7 +27,7 @@ _c = open(CONF).read()
 TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
 CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
 API = f"https://api.telegram.org/bot{TOK}"
-BOTS = [("Spot", 8080, "pass8080"), ("Futures", 8081, "pass8081")]
+BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081))]
 
 
 def send(text):

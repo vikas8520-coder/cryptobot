@@ -65,16 +65,16 @@
         "listen_port": 8083,
         "verbosity": "error",
         "enable_openapi": true,
-        "jwt_secret_key": "scalp_dryrun_local_only_change_before_going_live_0123",
-        "ws_token": "scalp_dryrun_local_only_ws_token",
         "CORS_origins": [],
-        "username": "freqtrader",
-        "password": "pass8083"
+        "username": "freqtrader"
     },
     "bot_name": "cryptobot-scalp-dryrun",
     "initial_state": "running",
     "force_entry_enable": false,
     "internals": {
         "process_throttle_secs": 5
-    }
+    },
+    "add_config_files": [
+        "config_scalp.secret.json"
+    ]
 }

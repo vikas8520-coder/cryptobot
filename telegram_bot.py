@@ -10,6 +10,7 @@ Read commands:  /status /profit /balance /carry /summary /help
 Action commands: /pause <bot>   /resume <bot>   /close <bot> <id|all>
 """
 import requests, subprocess, re, time, os, json
+from local_secrets import api_pw
 from requests.auth import HTTPBasicAuth
 
 from state_io import save_json, verified_send
@@ -25,8 +26,8 @@ API = f"https://api.telegram.org/bot{TOK}"
 PYBIN = "/Users/vikasreddy/cryptobot/.venv/bin/python3"
 MONITOR = "/Users/vikasreddy/cryptobot/funding_monitor.py"
 
-BOTS = [("Spot", 8080, "pass8080"), ("Futures", 8081, "pass8081")]
-BOTS_BY_NAME = {"spot": (8080, "pass8080"), "futures": (8081, "pass8081")}
+BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081))]
+BOTS_BY_NAME = {"spot": (8080, api_pw(8080)), "futures": (8081, api_pw(8081))}
 
 
 def redact(s):

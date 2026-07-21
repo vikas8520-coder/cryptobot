@@ -9,6 +9,7 @@ the current trades silently (so you don't get flooded with history) and only
 notifies on events AFTER that.
 """
 import requests, re, time, json, os
+from local_secrets import api_pw
 from requests.auth import HTTPBasicAuth
 
 from state_io import save_json, verified_send
@@ -19,7 +20,7 @@ TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
 CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
 API = f"https://api.telegram.org/bot{TOK}"
 STATE = "/Users/vikasreddy/cryptobot/notifier_state.json"
-BOTS = [("Spot", 8080, "pass8080"), ("Futures", 8081, "pass8081")]
+BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081))]
 POLL = 45  # seconds
 
 
