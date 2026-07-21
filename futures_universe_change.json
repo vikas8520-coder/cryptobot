@@ -1,0 +1,18 @@
+{
+  "changed_utc": "2026-07-20T19:35:26.701188+00:00",
+  "old_universe": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "XRP"
+  ],
+  "new_universe": [
+    "DOGE",
+    "AVAX",
+    "LINK",
+    "DOT",
+    "NEAR",
+    "ATOM"
+  ],
+  "reason": "removed spot/futures overlap causing 35x concentration force_exits"
+}

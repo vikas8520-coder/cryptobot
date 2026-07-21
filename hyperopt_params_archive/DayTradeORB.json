@@ -1,0 +1,28 @@
+{
+  "strategy_name": "DayTradeORB",
+  "params": {
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "buy_buffer": 0.54
+    },
+    "roi": {
+      "0": 0.226,
+      "383": 0.118,
+      "927": 0.085,
+      "1880": 0
+    },
+    "stoploss": {
+      "stoploss": -0.326
+    },
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.269,
+      "trailing_stop_positive_offset": 0.32,
+      "trailing_only_offset_is_reached": true
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-07-21 02:14:07.202259+00:00"
+}

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.vikas.divbrake</string>
+  <key>WorkingDirectory</key><string>/Users/vikasreddy/cryptobot</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/vikasreddy/cryptobot/.venv/bin/python</string>
+    <string>diversified_brake.py</string>
+  </array>
+  <key>StartInterval</key><integer>21600</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/vikasreddy/cryptobot/diversified_brake.log</string>
+  <key>StandardErrorPath</key><string>/Users/vikasreddy/cryptobot/diversified_brake.err</string>
+</dict>
+</plist>

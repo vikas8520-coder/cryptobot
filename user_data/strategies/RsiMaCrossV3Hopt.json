@@ -1,0 +1,32 @@
+{
+  "strategy_name": "RsiMaCrossV3Hopt",
+  "params": {
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "buy_rsi": 20,
+      "buy_rsi_cross": 48
+    },
+    "sell": {
+      "sell_rsi": 84
+    },
+    "roi": {
+      "0": 0.127,
+      "19": 0.046,
+      "75": 0.028,
+      "155": 0
+    },
+    "stoploss": {
+      "stoploss": -0.229
+    },
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.35,
+      "trailing_stop_positive_offset": 0.429,
+      "trailing_only_offset_is_reached": false
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-07-15 21:24:51.051729+00:00"
+}
