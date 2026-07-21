@@ -19,6 +19,7 @@ Audit fixes (2026-07-19):
   - state writes are atomic (state_io).
 """
 import json
+from local_secrets import api_pw
 import os
 import re
 import subprocess
@@ -41,9 +42,9 @@ API = f"https://api.telegram.org/bot{TOK}"
 # 2026-07-20: futures (OKX) bot brought back for 3-bot data analysis — watch it again.
 # 2026-07-20: added scalp (1m) + daytrade (15m) LAB bots — dry-run proof-of-fee-drag.
 # tradenotifier stays retired (its fills surface in the activity feed instead).
-BOTS = [("Spot", 8080, "__REDACTED__"), ("Futures", 8081, "__REDACTED__"),
-        ("Braked Hold", 8082, "__REDACTED__"),
-        ("Scalp", 8083, "__REDACTED__"), ("Day Trade", 8084, "__REDACTED__")]
+BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081)),
+        ("Braked Hold", 8082, api_pw(8082)),
+        ("Scalp", 8083, api_pw(8083)), ("Day Trade", 8084, api_pw(8084))]
 DASHBOARD = "http://127.0.0.1:8090/"
 DAEMONS = ["com.vikas.guardian", "com.vikas.traderjoy"]
 BRAKE_STALE_H = 12         # brake signal is daily; only flag if the job is truly dead

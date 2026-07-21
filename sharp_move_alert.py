@@ -7,6 +7,7 @@ three bots reacted: who's long, who's short (offense), who's in cash (defense). 
 ONCE per move, then re-arms when BTC calms back under 3%, so no spam.
 """
 import json
+from local_secrets import api_pw
 import os
 import re
 
@@ -24,8 +25,8 @@ TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
 CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
 API = f"https://api.telegram.org/bot{TOK}"
 
-BOTS = [("Spot", 8080, "__REDACTED__"), ("Futures", 8081, "__REDACTED__"),
-        ("Braked Hold", 8082, "__REDACTED__")]
+BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081)),
+        ("Braked Hold", 8082, api_pw(8082))]
 TRIGGER = 5.0    # |24h BTC move| that counts as "sharp"
 RESET = 3.0      # re-arm once the move calms below this
 

@@ -10,6 +10,7 @@ with real forward data instead of a backtest. Overwrites the same-day row so the
 series stays clean if run multiple times a day.
 """
 import csv
+from local_secrets import api_pw
 import io
 import json
 import os
@@ -25,8 +26,8 @@ CSVF = os.path.join(BASE, "equity_history.csv")
 STATE = os.path.join(BASE, "equity_logger_state.json")
 BRAKE_STATE = os.path.join(BASE, "brake_alert_state.json")
 START = 1000.0
-BOTS = [("spot", 8080, "__REDACTED__"), ("futures", 8081, "__REDACTED__"),
-        ("brakedhold", 8082, "__REDACTED__")]
+BOTS = [("spot", 8080, api_pw(8080)), ("futures", 8081, api_pw(8081)),
+        ("brakedhold", 8082, api_pw(8082))]
 BASKET = ["BTC", "ETH", "SOL", "XRP", "ADA", "LTC",
           "DOGE", "LINK", "BNB", "AVAX", "DOT", "TRX"]
 FIELDS = ["date", "spot", "futures", "brakedhold", "btc_hold", "basket_hold"]

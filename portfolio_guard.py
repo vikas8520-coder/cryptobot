@@ -15,6 +15,7 @@ Watches BOTH and enforces portfolio-level rules via their REST APIs. Priority or
 State persisted in guard_state.json; re-read each poll so /reset takes effect.
 """
 import requests, re, time, json, os
+from local_secrets import api_pw
 from requests.auth import HTTPBasicAuth
 
 from state_io import save_json, verified_send
@@ -31,8 +32,8 @@ STATE = "/Users/vikasreddy/cryptobot/guard_state.json"
 # and the guardian consumes it at the top of its cycle.
 RESET_REQ = "/Users/vikasreddy/cryptobot/guard_reset_request.json"
 
-SPOT = ("Spot", 8080, "__REDACTED__")
-FUTURES = ("Futures", 8081, "__REDACTED__")
+SPOT = ("Spot", 8080, api_pw(8080))
+FUTURES = ("Futures", 8081, api_pw(8081))
 BOTS = [SPOT, FUTURES]
 
 POLL = 15                 # seconds between portfolio checks

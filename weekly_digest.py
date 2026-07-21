@@ -4,6 +4,7 @@ Weekly digest — a once-a-week Telegram summary of both trading bots + carry.
 Scheduled via launchd (Sunday evening). Send-only; coexists with the listener.
 """
 import requests, re, subprocess
+from local_secrets import api_pw
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
 
@@ -14,7 +15,7 @@ CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
 API = f"https://api.telegram.org/bot{TOK}"
 PYBIN = "/Users/vikasreddy/cryptobot/.venv/bin/python3"
 MONITOR = "/Users/vikasreddy/cryptobot/funding_monitor.py"
-BOTS = [("Spot", 8080, "__REDACTED__"), ("Futures", 8081, "__REDACTED__")]
+BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081))]
 
 
 def send(text):

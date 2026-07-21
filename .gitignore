@@ -2,6 +2,10 @@
 telegram.conf
 telegram.conf.bak
 *.bak
+# per-bot API creds (jwt_secret_key, ws_token, password)
+*.secret.json
+# localhost REST API passwords for the helper tools
+local_secrets.py
 
 # --- Python env / caches ---
 .venv/

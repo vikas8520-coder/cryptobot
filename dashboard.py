@@ -10,6 +10,7 @@ the page never blocks on exchange calls.
 Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 """
 import csv
+from local_secrets import api_pw
 import json
 import os
 import re
@@ -153,11 +154,11 @@ def funding_status():
         return None
 
 BOTS = [
-    ("Spot", 8080, "__REDACTED__", "Trend-follow · spot"),
-    ("Futures", 8081, "__REDACTED__", "Long / short · futures"),
-    ("Braked Hold", 8082, "__REDACTED__", "200-day brake · spot"),
-    ("Scalp", 8083, "__REDACTED__", "VWAP reversion · 5m LAB"),
-    ("Day Trade", 8084, "__REDACTED__", "Opening-range breakout · 1h LAB"),
+    ("Spot", 8080, api_pw(8080), "Trend-follow · spot"),
+    ("Futures", 8081, api_pw(8081), "Long / short · futures"),
+    ("Braked Hold", 8082, api_pw(8082), "200-day brake · spot"),
+    ("Scalp", 8083, api_pw(8083), "VWAP reversion · 5m LAB"),
+    ("Day Trade", 8084, api_pw(8084), "Opening-range breakout · 1h LAB"),
 ]
 
 app = FastAPI(title="Trading Desk")
@@ -176,7 +177,7 @@ def candles(asset: str):
         if a in CRYPTO_COINS:
             r = requests.get("http://127.0.0.1:8082/api/v1/pair_candles",
                              params={"pair": f"{a}/USDT", "timeframe": "1d", "limit": 600},
-                             auth=HTTPBasicAuth("freqtrader", "__REDACTED__"), timeout=10).json()
+                             auth=HTTPBasicAuth("freqtrader", api_pw(8082)), timeout=10).json()
             cols, data = r["columns"], r["data"]
             di, oi, hi, li, ci = (cols.index(k) for k in ("date", "open", "high", "low", "close"))
             vi = cols.index("volume") if "volume" in cols else None

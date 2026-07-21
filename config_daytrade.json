@@ -66,16 +66,16 @@
         "listen_port": 8084,
         "verbosity": "error",
         "enable_openapi": true,
-        "jwt_secret_key": "daytrade_dryrun_local_only_change_before_going_live_01",
-        "ws_token": "daytrade_dryrun_local_only_ws_token",
         "CORS_origins": [],
-        "username": "freqtrader",
-        "password": "__REDACTED__"
+        "username": "freqtrader"
     },
     "bot_name": "cryptobot-daytrade-dryrun",
     "initial_state": "running",
     "force_entry_enable": false,
     "internals": {
         "process_throttle_secs": 5
-    }
+    },
+    "add_config_files": [
+        "config_daytrade.secret.json"
+    ]
 }

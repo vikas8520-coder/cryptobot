@@ -73,16 +73,16 @@
         "listen_port": 8082,
         "verbosity": "error",
         "enable_openapi": true,
-        "jwt_secret_key": "dryrun_local_only_change_before_going_live_0123456789",
-        "ws_token": "dryrun_local_only_ws_token_change_before_live",
         "CORS_origins": [],
-        "username": "freqtrader",
-        "password": "__REDACTED__"
+        "username": "freqtrader"
     },
     "bot_name": "cryptobot-brakedhold",
     "initial_state": "running",
     "force_entry_enable": false,
     "internals": {
         "process_throttle_secs": 5
-    }
+    },
+    "add_config_files": [
+        "config_braked.secret.json"
+    ]
 }
