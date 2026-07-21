@@ -1,0 +1,27 @@
+# --- SECRETS (never commit) ---
+telegram.conf
+telegram.conf.bak
+*.bak
+
+# --- Python env / caches ---
+.venv/
+__pycache__/
+*.pyc
+
+# --- Trade databases (runtime data) ---
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# --- Logs ---
+*.log
+*.err
+
+# --- Bulky / generated ---
+user_data/data/
+user_data/hyperopt_results/
+user_data/backtest_results/
+user_data/plot/
+
+# --- Constantly-changing runtime state ---
+*_state.json

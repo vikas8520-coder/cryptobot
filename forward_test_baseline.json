@@ -1,0 +1,15 @@
+{
+  "Spot": {
+    "balance": 989.11569902,
+    "pct": -1.1,
+    "trades": 7,
+    "winrate": 0.0
+  },
+  "Futures": {
+    "balance": 994.37019273,
+    "pct": -0.57,
+    "trades": 11,
+    "winrate": 0.0
+  },
+  "date": "Jul 17, 2026"
+}

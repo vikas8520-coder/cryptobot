@@ -1,0 +1,27 @@
+{
+  "strategy_name": "TrendFollowWF",
+  "params": {
+    "roi": {
+      "0": 10
+    },
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "buy_adx": 35,
+      "ema_fast": 27,
+      "ema_slow": 52
+    },
+    "stoploss": {
+      "stoploss": -0.223
+    },
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.3,
+      "trailing_stop_positive_offset": 0.332,
+      "trailing_only_offset_is_reached": false
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-07-16 22:39:06.241926+00:00"
+}

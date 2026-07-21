@@ -1,0 +1,10 @@
+{
+  "assets": [
+    {"symbol": "SPY",   "name": "S&P 500 (US stocks)"},
+    {"symbol": "QQQ",   "name": "Nasdaq 100 (US tech)"},
+    {"symbol": "^NSEI", "name": "NIFTY 50 (India stocks)"},
+    {"symbol": "TLT",   "name": "US 20y Treasuries (bonds)"},
+    {"symbol": "GLD",   "name": "Gold"},
+    {"symbol": "PPLT",  "name": "Platinum"}
+  ]
+}

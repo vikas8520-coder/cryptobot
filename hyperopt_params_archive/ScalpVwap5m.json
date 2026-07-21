@@ -1,0 +1,30 @@
+{
+  "strategy_name": "ScalpVwap5m",
+  "params": {
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "adx_max": 17,
+      "band": 2.7,
+      "vol_mult": 1.8
+    },
+    "roi": {
+      "0": 0.188,
+      "29": 0.075,
+      "58": 0.02,
+      "104": 0
+    },
+    "stoploss": {
+      "stoploss": -0.16
+    },
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.257,
+      "trailing_stop_positive_offset": 0.314,
+      "trailing_only_offset_is_reached": false
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-07-21 02:13:15.611911+00:00"
+}
