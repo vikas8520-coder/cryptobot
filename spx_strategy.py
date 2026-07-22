@@ -50,6 +50,11 @@ DEFAULTS = {
     "enter_tag": "sma_cross_up",
     "exit_reason": "sma_cross_down",
     "max_hold_cycles": 0,      # 0 = exit only on the down-cross; >0 = also time-stop
+    "dma_filter": 0,            # 0 = no trend filter; >0 = SMA(window) on DAILY closes,
+                             #   entry blocked when price <= that SMA (audit 2026-07-22:
+                             #   BTC backtest showed +200-DMA cuts maxDD ~14pts at the
+                             #   cost of half the trades — Sharpe 1.20->2.48. Default
+                             #   OFF so SPX/Nifty stay pure SMA-cross.)
 }
 
 
@@ -81,6 +86,7 @@ class SpxStrategy:
         self._last_fetch = 0.0
         self._last_bar_ts = 0.0
         self._last_price = None
+        self._daily = []           # daily closes for the optional DMA trend filter
 
     # ---- real feed (called by the engine on its throttle, NEVER inside signal) ----
 
@@ -102,6 +108,16 @@ class SpxStrategy:
             # newest bar's own timestamp -> lets signal() know if the market is idle
             self._last_bar_ts = df.index[-1].timestamp()
             self._last_fetch = time.time()
+            # Optional DMA trend filter: pull DAILY closes only when configured
+            # (audit 2026-07-22: keeps SPX/Nifty free of an extra yfinance call).
+            dma = int(self.params.get("dma_filter", 0) or 0)
+            if dma > 0:
+                try:
+                    d = yf.Ticker(str(self.params["ticker"])).history(
+                        period="2y", interval="1d")
+                    self._daily = [float(x) for x in d["Close"].tolist() if x == x]
+                except Exception:
+                    pass   # DMA filter simply stays un-fired if the daily pull fails
             return True
         except Exception as e:
             print(f"spx_strategy: refresh failed ({type(e).__name__}: {e}); "
@@ -118,6 +134,21 @@ class SpxStrategy:
         # cold real cache -> deterministic fallback so the chain never wedges flat
         return apex_strategy.SyntheticStrategy(
             {"synthetic_strategy": {"start_price": 550.0}}).price(cycle)
+
+    def _above_dma(self):
+        """True when price is above the optional SMA(dma_filter) on DAILY closes.
+        Returns True when the filter is OFF (dma_filter<=0) so default bots are
+        unaffected. audit 2026-07-22: BTC backtest showed +200-DMA cuts
+        maxDD ~14pts (Sharpe 1.20->2.48); SPX/Nifty keep dma_filter=0."""
+        dma = int(self.params.get("dma_filter", 0) or 0)
+        if dma <= 0:
+            return True
+        if len(self._daily) < dma + 1:
+            return True   # not enough daily history yet — don't block on a cold start
+        m = apex_strategy.sma(self._daily, dma)
+        if m is None:
+            return True
+        return (self._last_price or 0.0) > m
 
     def _market_idle(self):
         """True when the newest real bar is older than stale_secs (after hours / weekend).
@@ -162,6 +193,8 @@ class SpxStrategy:
             return {"action": "none", "reason": "paused"}
         if self._market_idle():
             return {"action": "none", "reason": "market_idle"}
+        if not self._above_dma():
+            return {"action": "none", "reason": "below_dma"}
         if len(opens) >= max_open:
             return {"action": "none", "reason": "max_open_trades"}
         if cross > 0:
