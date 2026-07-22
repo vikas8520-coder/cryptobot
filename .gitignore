@@ -35,3 +35,6 @@ activity_feed.jsonl
 *_history.csv
 risk_backtest_equity.csv
 *_board.json
+
+# --- ApeX (key/secret/passphrase from on-chain registration) ---
+apex_creds.json
