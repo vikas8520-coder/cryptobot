@@ -24,6 +24,7 @@ BOTS = {
     "daytrade":   ("Day Trade · ORB 1h LAB",  "tradesv3_daytrade.sqlite"),
     "apex":       ("ApeX · Omni DEX",         "tradesv3_apex.sqlite"),
     "spx":        ("S&P 500 · SPY paper",      "tradesv3_spx.sqlite"),
+    "nifty":      ("Nifty 50 · NIFTYBEES paper", "tradesv3_nifty.sqlite"),
 }
 
 

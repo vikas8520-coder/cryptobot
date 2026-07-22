@@ -41,6 +41,7 @@ import apex_strategy   # reuse the proven seeded walk + sma() helper (single sou
 SPY = "SPY"
 DEFAULTS = {
     "pair": "SPY/USD",
+    "ticker": "SPY",           # yfinance symbol for the real feed (e.g. SPY, NIFTYBEES.NS)
     "interval": "1h",          # yfinance interval for the real feed
     "lookback_bars": 60,       # candles to keep in the cache (>= slow SMA + margin)
     "fast": 10,                # SMA-cross fast period
@@ -91,7 +92,8 @@ class SpxStrategy:
             return True
         try:
             import yfinance as yf
-            df = yf.Ticker(SPY).history(period="10d", interval=str(self.params["interval"]))
+            df = yf.Ticker(str(self.params["ticker"])).history(
+                period="10d", interval=str(self.params["interval"]))
             closes = [float(x) for x in df["Close"].tolist() if x == x]  # drop NaN
             if not closes:
                 return False
