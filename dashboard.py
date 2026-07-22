@@ -9,6 +9,10 @@ the page never blocks on exchange calls.
 
 Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 """
+
+# [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
+# the build shows in <title> and the no-store header forces a fresh fetch.
+DASH_VERSION = "2026-07-22c"
 import csv
 from local_secrets import api_pw
 import json
@@ -465,13 +469,19 @@ def memory_full():
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return PAGE
+    # [cache-bust] no-store forces the browser to re-fetch every load, so a
+    # stale tab never silently shows an old build after a dashboard deploy.
+    # __DASH_VER__ is substituted from DASH_VERSION at request time.
+    return HTMLResponse(
+        PAGE.replace("__DASH_VER__", DASH_VERSION),
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 PAGE = r"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trading Desk</title>
+<title>Trading Desk · build __DASH_VER__</title>
 <style>
   :root{
     --ground:#0E1420; --surface:#161E2E; --surface-2:#1C2739; --line:#26314A;
