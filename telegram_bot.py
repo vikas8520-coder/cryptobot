@@ -28,10 +28,15 @@ MONITOR = "/Users/vikasreddy/cryptobot/funding_monitor.py"
 
 BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081)),
         ("ApeX", 8085, api_pw(8085)), ("S&P 500", 8086, api_pw(8086)),
-        ("Nifty 50", 8087, api_pw(8087))]
+        ("Nifty 50", 8087, api_pw(8087)),
+        ("ONGC", 8088, api_pw(8088)), ("ITC", 8089, api_pw(8089))]
 BOTS_BY_NAME = {"spot": (8080, api_pw(8080)), "futures": (8081, api_pw(8081)),
                 "apex": (8085, api_pw(8085)), "spx": (8086, api_pw(8086)),
-                "nifty": (8087, api_pw(8087))}
+                "nifty": (8087, api_pw(8087)), "ongc": (8088, api_pw(8088)),
+                "itc": (8089, api_pw(8089))}
+# The help/menu strings below list these names verbatim; a bot added here and NOT there is
+# a bot the user can never reach from Telegram.
+BOT_NAMES = "|".join(BOTS_BY_NAME)
 
 
 def redact(s):
@@ -287,10 +292,10 @@ def cmd_macro(args):
 def _resolve_bot(args):
     """Return (name, port, pw) from first arg, or None + error string."""
     if not args:
-        return None, "Which bot? Use `spot`, `futures`, `apex`, `spx`, or `nifty`."
+        return None, f"Which bot? Use `{'`, `'.join(BOTS_BY_NAME)}`."
     name = args[0].lower()
     if name not in BOTS_BY_NAME:
-        return None, f"Unknown bot '{args[0]}'. Use `spot`, `futures`, `apex`, `spx`, or `nifty`."
+        return None, f"Unknown bot '{args[0]}'. Use `{'`, `'.join(BOTS_BY_NAME)}`."
     port, pw = BOTS_BY_NAME[name]
     return (name, port, pw), None
 
@@ -364,9 +369,9 @@ HELP = ("🤖 TraderJoy commands:\n"
         "/memory – the brake's track record (holds & outcomes)\n"
         "/summary – everything at once\n"
         "— control —\n"
-        "/pause <spot|futures|apex|spx|nifty> – stop opening new trades\n"
-        "/resume <spot|futures|apex|spx|nifty> – re-enable new trades\n"
-        "/close <spot|futures|apex|spx|nifty> <id|all> – exit a trade now\n"
+        f"/pause <{BOT_NAMES}> – stop opening new trades\n"
+        f"/resume <{BOT_NAMES}> – re-enable new trades\n"
+        f"/close <{BOT_NAMES}> <id|all> – exit a trade now\n"
         "/reset – clear the circuit breaker & resume\n"
         "/help – this list")
 
@@ -392,9 +397,9 @@ MENU = [
     ("memory", "brake track record (holds & outcomes)"),
     ("carry", "funding-carry status"),
     ("summary", "everything at once"),
-    ("pause", "stop new trades — add spot|futures|apex|spx|nifty"),
-    ("resume", "re-enable new trades — add spot|futures|apex|spx|nifty"),
-    ("close", "exit a trade — add spot|futures|apex|spx|nifty id|all"),
+    ("pause", f"stop new trades — add {BOT_NAMES}"),
+    ("resume", f"re-enable new trades — add {BOT_NAMES}"),
+    ("close", f"exit a trade — add {BOT_NAMES} id|all"),
     ("reset", "clear the circuit breaker & resume"),
     ("help", "list all commands"),
 ]
