@@ -25,6 +25,8 @@ BOTS = {
     "apex":       ("ApeX · Omni DEX",         "tradesv3_apex.sqlite"),
     "spx":        ("S&P 500 · SPY paper",      "tradesv3_spx.sqlite"),
     "nifty":      ("Nifty 50 · NIFTYBEES paper", "tradesv3_nifty.sqlite"),
+    "ongc":       ("ONGC · dividend",          "tradesv3_ongc.sqlite"),
+    "itc":        ("ITC · dividend",           "tradesv3_itc.sqlite"),
 }
 
 
