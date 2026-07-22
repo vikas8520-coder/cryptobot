@@ -1,0 +1,18 @@
+{
+  "_comment": "Live properties the morning health digest checks. Static HTTP targets below; Cloud Run services are auto-discovered via gcloud at runtime (once `gcloud auth login` is done).",
+  "targets": [
+    {"name": "LaundroOPS (landing)", "url": "https://laundroops.com", "kind": "vercel", "expect": "200"},
+    {"name": "LaundroOPS (app)", "url": "https://hellowash-app.vercel.app", "kind": "vercel", "expect": "200"},
+    {"name": "Givers (web)", "url": "https://givers.global", "kind": "vercel", "expect": "200"},
+    {"name": "AIArsenal", "url": "https://ai-arsenal.vercel.app", "kind": "vercel", "expect": "200"},
+    {"name": "Crypto dashboard", "url": "http://127.0.0.1:8090/", "kind": "local", "expect": "200"}
+  ],
+  "cloud_run_autodiscover": {
+    "enabled": true,
+    "note": "When gcloud is authed, the health prompt runs `gcloud run services list` and health-checks each service URL. Expected services (us-east1/us-central1): saga-board (SAGA OS), saga-agents, Givers API, workspace-studio/Kanban. No manual URLs needed once authed."
+  },
+  "context": {
+    "intentionally_paused": "Per cost-saving, some GCP databases/services are deliberately STOPPED (see memory project_gcp_costs). Intentionally paused is NOT an outage — note it, don't alarm.",
+    "aiarsenal_note": "AIArsenal is on Vercel now (Cloud Run paused). ai-arsenal-nu.vercel.app is an equivalent alias."
+  }
+}
