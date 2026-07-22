@@ -13,6 +13,7 @@
 # shorts -> the bull return should recover to ~long-only. In a bear, BTC is
 # below -> shorting is ON -> capture the downside.
 
+from freqtrade.exchange import timeframe_to_minutes
 from freqtrade.strategy import IStrategy, merge_informative_pair
 from pandas import DataFrame
 import talib.abstract as ta
@@ -32,9 +33,12 @@ class TrendFollowLS2(IStrategy):
     trailing_only_offset_is_reached = True
 
     process_only_new_candles = True
-    startup_candle_count = 220   # BTC EMA200 + 12-candle confirmation
+    startup_candle_count = 220   # BTC EMA200 + confirmation candles
 
-    SHORT_CONFIRM = 12           # hours BTC must stay bearish before shorts turn on
+    # Wall-clock duration BTC must stay bearish before shorts turn on. Kept in
+    # HOURS (not candles) so a timeframe change doesn't silently change the
+    # confirmation window: at 1h this was 12 candles, at 4h it is 3 candles.
+    SHORT_CONFIRM_HOURS = 12
 
     def leverage(self, pair, current_time, current_rate, proposed_leverage,
                  max_leverage, entry_tag, side, **kwargs) -> float:
@@ -49,6 +53,10 @@ class TrendFollowLS2(IStrategy):
         dataframe["ema_trend"] = ta.EMA(dataframe, timeperiod=100)
         dataframe["adx"] = ta.ADX(dataframe, timeperiod=14)
 
+        # merge_informative_pair appends "_{timeframe_inf}" to every merged column,
+        # so the column name must track self.timeframe (which config.json can override).
+        short_ok_col = f"btc_short_ok_{self.timeframe}"
+
         if self.dp:
             btc = self.dp.get_pair_dataframe("BTC/USDT:USDT", self.timeframe).copy()
             btc["btc_ema50"] = ta.EMA(btc, timeperiod=50)
@@ -57,14 +65,17 @@ class TrendFollowLS2(IStrategy):
                 (btc["close"] < btc["btc_ema200"])
                 & (btc["btc_ema50"] < btc["btc_ema200"])
             ).astype(int)
-            # confirmed bear = last SHORT_CONFIRM candles ALL bear
-            btc["btc_short_ok"] = bear_raw.rolling(self.SHORT_CONFIRM).min().fillna(0).astype(int)
+            # confirmed bear = last SHORT_CONFIRM_HOURS worth of candles ALL bear
+            confirm_candles = max(
+                1, self.SHORT_CONFIRM_HOURS * 60 // timeframe_to_minutes(self.timeframe)
+            )
+            btc["btc_short_ok"] = bear_raw.rolling(confirm_candles).min().fillna(0).astype(int)
             dataframe = merge_informative_pair(
                 dataframe, btc[["date", "btc_short_ok"]],
                 self.timeframe, self.timeframe, ffill=True,
             )
         else:
-            dataframe["btc_short_ok_1h"] = 0
+            dataframe[short_ok_col] = 0
 
         return dataframe
 
@@ -84,7 +95,7 @@ class TrendFollowLS2(IStrategy):
         # SHORT — bearish stack AND market confirmed in a downtrend
         dataframe.loc[
             (
-                (dataframe["btc_short_ok_1h"] == 1)
+                (dataframe[f"btc_short_ok_{self.timeframe}"] == 1)
                 & (dataframe["close"] < dataframe["ema_fast"])
                 & (dataframe["ema_fast"] < dataframe["ema_slow"])
                 & (dataframe["ema_slow"] < dataframe["ema_trend"])

@@ -71,6 +71,23 @@ def daemon_pids():
     return out
 
 
+def _brake_job_enabled():
+    """True only if the brake-alerts launchd job is actually loaded.
+
+    The brake signal (brake_alert_state.json) is produced by com.vikas.brakealerts.
+    That plist was intentionally retired to disabled_plists/ on 2026-07-20, so a
+    stale/missing state file is EXPECTED, not a fault. Checking launchctl means this
+    auto-reactivates if the job is ever reloaded — no code change needed.
+    """
+    try:
+        out = subprocess.run(["launchctl", "list"], capture_output=True,
+                             text=True, timeout=10).stdout
+        return "com.vikas.brakealerts" in out
+    except Exception:
+        # if we can't tell, stay silent rather than cry wolf
+        return False
+
+
 def check():
     """Return {problem_key: human_reason} for everything currently broken."""
     broken = {}
@@ -93,9 +110,9 @@ def check():
             broken[f"daemon:{label.split('.')[-1]}"] = "not running (launchctl)"
     if os.path.exists(BRAKE_STATE):
         age_h = (time.time() - os.path.getmtime(BRAKE_STATE)) / 3600
-        if age_h > BRAKE_STALE_H:
+        if age_h > BRAKE_STALE_H and _brake_job_enabled():
             broken["brake-data"] = f"stale ({age_h:.1f}h old)"
-    else:
+    elif _brake_job_enabled():
         broken["brake-data"] = "missing"
     return broken
 
