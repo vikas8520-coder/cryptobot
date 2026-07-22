@@ -13,6 +13,7 @@ import csv
 from local_secrets import api_pw
 import json
 import os
+import paper_fx                 # [PAPER EQUITY] INR->USD for the combined headline
 import re
 
 import requests
@@ -339,8 +340,14 @@ def overview():
         bt = bal.get("total")
         has_bal = isinstance(bt, (int, float)) and not isinstance(bt, bool)
         b = bt if has_bal else 0
+        # each bot reports in its own currency. Freqtrade-native signal is
+        # stake_currency; the apex_api shim also echoes pair as "X/INR". Convert
+        # INR -> USD so the combined headline sums in ONE currency.
+        sc = (cfg.get("stake_currency") or "").upper()
+        pair = (cfg.get("pair") or "").upper()
+        currency = "INR" if (sc == "INR" or pair.endswith("/INR")) else "USD"
         if has_bal:
-            tot_bal += b
+            tot_bal += paper_fx.to_usd(b, currency)
         # 30-day realized-equity sparkline from the /daily endpoint (most-recent-first)
         eq = []
         daily = api(port, pw, "daily?timescale=30")
@@ -359,6 +366,7 @@ def overview():
             "trades": prof.get("closed_trade_count", 0) or 0,
             "winrate": (prof.get("winrate", 0) or 0) * 100,
             "open": opens, "equity": eq,
+            "currency": currency,    # [PAPER EQUITY] lets the card show ₹ vs $ per-bot
             # the coin universe the bot is monitoring (base symbols), incl. any open-trade
             # pairs Freqtrade auto-adds; lets the card show "watching" even when flat
             "watching": [p.split("/")[0] for p in (wl.get("whitelist") or [])],
@@ -400,6 +408,7 @@ def overview():
     return JSONResponse({
         "bots": bots,
         "total_balance": tot_bal,
+        "total_currency": "USD",   # [PAPER EQUITY] INR bots converted -> honest combined $
         "total_pnl_pct": (tot_bal / start_total - 1) * 100 if start_total else 0,
         "bots_reporting": n_reporting, "bots_missing": missing,
         "guardian": {
@@ -1211,7 +1220,7 @@ $("themeToggle").onclick=()=>{
 };
 setTheme(localStorage.getItem("deskTheme")||"dark");
 switchChartView("trader");   // default to the ApeX-style Trader view (theme now set)
-const money=v=>"$"+(v>=1000?v.toLocaleString(undefined,{maximumFractionDigits:0}):v.toFixed(2));
+const money=(v,cur="USD")=>{const s=cur==="INR"?"₹":"$";return s+(v>=1000?v.toLocaleString(undefined,{maximumFractionDigits:0}):v.toFixed(2));};
 const pct=v=>(v>=0?"+":"")+v.toFixed(2)+"%";
 const cls=v=>v>0?"pos":v<0?"neg":"";
 const price=v=>v>=1000?"$"+v.toLocaleString(undefined,{maximumFractionDigits:0}):v>=1?"$"+v.toFixed(2):"$"+v.toFixed(3);
@@ -1294,7 +1303,7 @@ function botRow(b){
   const ex=botOpen.has(b.name);
   // "—" not "$0.00" when the bot never answered /balance: a fake zero reads as a
   // real drained wallet (honest-failure rule)
-  const bal=b.has_balance?money(b.balance):"—";
+  const bal=b.has_balance?money(b.balance,b.currency||"USD"):"—";
   return `<div class="botitem"><div class="botcols botrow ${health}${b.online?" on":""}" role="button" tabindex="0"
       aria-expanded="${ex}" data-bot="${b.name}" title="${b.name} — click for open positions &amp; watchlist">
       <i class="sdot"></i>
