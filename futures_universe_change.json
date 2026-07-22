@@ -1,5 +1,5 @@
 {
-  "changed_utc": "2026-07-20T19:35:26.701188+00:00",
+  "changed_utc": "2026-07-21T02:25:00+00:00",
   "old_universe": [
     "BTC",
     "ETH",
@@ -14,5 +14,7 @@
     "NEAR",
     "ATOM"
   ],
-  "reason": "removed spot/futures overlap causing 35x concentration force_exits"
+  "reason": "removed spot/futures overlap causing 35x concentration force_exits",
+  "changed_utc_original": "2026-07-20T19:35:26.701188+00:00",
+  "cleanup_note": "leftover XRP long (opened pre-swap) manually force-closed 2026-07-21 02:24 UTC; baseline moved past it so the Friday check counts only genuine NEW concentration force-exits (expected: 0, since spot & futures universes are now disjoint)"
 }

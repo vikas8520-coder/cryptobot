@@ -1,0 +1,12 @@
+You are TEST-firing a scheduled wake-up chain (launchd -> headless Claude -> Telegram) on a Mac, to prove it works before relying on it Friday. You are HEADLESS; the only thing that reaches the owner (Vikas) is the Telegram message you send. Working directory: ~/cryptobot. Keep this MINIMAL and read-only.
+
+DO THIS:
+1. Get one real data point:  .venv/bin/python -c "import stats_lib; print(stats_lib.stats(['futures']))"
+2. Send a SHORT Telegram message proving the full chain works (a launchd job woke a fresh Claude, which read live bot data and delivered this). Run:
+   .venv/bin/python -c "
+import brake_alerts as ba
+from state_io import verified_send
+msg = '''🧪 TEST — Friday wake-up chain WORKS. A headless Claude was launched by launchd, read the futures bot, and sent this itself. <replace this with a one-line honest futures status from step 1>. The real auto-analysis is scheduled for Fri 9am.'''
+print('SEND_RESULT:', 'sent' if verified_send(ba.API, ba.CHAT, msg, feed_source='report') else 'FAILED')
+"
+3. Confirm it printed SEND_RESULT: sent (retry once if FAILED). Then stop. Do not modify anything.

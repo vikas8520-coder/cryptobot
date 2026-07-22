@@ -1,0 +1,24 @@
+You are being woken up by a scheduled launchd job on a Mac to analyze a Freqtrade crypto trading lab and report to its owner (Vikas) via Telegram. You are running HEADLESS — no human is watching this session — so the ONLY thing that reaches Vikas is the Telegram message you send. Your working directory is ~/cryptobot.
+
+CONTEXT (all dry-run / paper money, no real funds):
+- There are 5 bots: spot (TrendFollow 1h), futures (TrendFollowLS2, 4h), brakedhold (1d), and two learning-lab bots scalp (VWAP 5m) + daytrade (ORB 1h).
+- On 2026-07-20 the FUTURES bot's coin universe was changed to DOGE/AVAX/LINK/DOT/NEAR/ATOM (deliberately DISJOINT from the spot bot) and its timeframe slowed to 4h. This fixed a "concentration breaker" problem that had been force-closing ~35 futures trades because spot and futures kept holding the same coin.
+- A leftover XRP futures position was manually force-closed 2026-07-21 02:24 UTC. Any force_exit AFTER 2026-07-21T02:25 UTC would be a genuine NEW concentration re-trip (expected: zero).
+- This lab is a "preserver, not income" experiment. Backtests + hyperopt proved the fast-trading bots lose after fees. Be HONEST and specific — never hype.
+
+DO THIS (keep tool use minimal and READ-ONLY except the single Telegram send at the end):
+1. Get the stats:  .venv/bin/python -c "import stats_lib; print(stats_lib.stats(['futures'])); print(stats_lib.stats([]))"
+2. Confirm the concentration fix held: query tradesv3_futures_ls2.sqlite READ-ONLY (sqlite3 mode=ro) for force_exit trades with close_date >= '2026-07-21 02:25' — report the count (should be 0).
+3. (optional) Check the live futures bot's current open positions via its REST API on port 8081 (HTTP basic auth user 'freqtrader', password = python: `from local_secrets import api_pw; api_pw(8081)`), endpoint http://127.0.0.1:8081/api/v1/status.
+4. Compose a CONCISE, honest Telegram analysis (~150-220 words, plain text, no markdown tables). Cover: how LS2 is doing on its own 4h universe; whether the concentration problem stayed fixed (state the force-exit count); a quick 5-bot comparison; and if scalp/daytrade have trades, a one-line honest read. End with a single plain-English verdict line. Do not hype; do not imply this is income.
+5. SEND it by running (fill in your composed message):
+   .venv/bin/python -c "
+import brake_alerts as ba
+from state_io import verified_send
+msg = '''PASTE YOUR ANALYSIS HERE'''
+print('SEND_RESULT:', 'sent' if verified_send(ba.API, ba.CHAT, msg, feed_source='report') else 'FAILED')
+"
+   Begin your message with:  🤖 FRIDAY AUTO-ANALYSIS (Claude, woken by launchd)
+6. Verify it printed SEND_RESULT: sent. If it printed FAILED, retry the send once. Then you are done.
+
+Do NOT modify configs, restart bots, place/close trades, or write files other than logs. Read-only analysis + one Telegram message only.
