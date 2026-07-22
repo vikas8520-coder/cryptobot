@@ -538,45 +538,73 @@ PAGE = r"""<!doctype html>
   h2.sec{font-size:12px;font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;
     color:var(--muted);margin:0 0 13px;font-weight:600;}
 
-  .bots{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-bottom:30px;}
-  .bot{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:18px;display:flex;flex-direction:column;gap:14px;}
-  .bot .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
-  .bot .nm{font-weight:700;font-size:16px;letter-spacing:-.01em;}
-  .bot .ds{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px;}
-  .state{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
-    padding:4px 9px;border-radius:20px;border:1px solid var(--line);white-space:nowrap;}
+  /* ---- BOT TABLE ----
+     This is a MONITOR surface: 11 bots have to fit one screen. The old 3-col tile
+     grid gave every bot a full card (wallet + P&L + trades + win-bar + 30-day
+     sparkline + open positions + watchlist) and overflowed the viewport at 9 bots
+     (2026-07-22). Now: one scannable row per bot, detail on demand via expand. */
+  .bots{display:flex;flex-direction:column;gap:14px;margin-bottom:30px;}
+  .botgrp{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  .botgrphd{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;
+    padding:7px 14px;background:var(--surface-2);border-bottom:1px solid var(--line);}
+  .botgrphd .gsum{font-family:var(--mono);font-size:11.5px;color:var(--muted);
+    font-variant-numeric:tabular-nums;}
+  /* one shared column template so every group's numbers line up down the page */
+  .botcols{display:grid;gap:10px;align-items:center;padding:6px 14px;
+    grid-template-columns:10px minmax(120px,2.4fr) 62px 92px 96px 52px 62px 78px 12px;}
+  .botcols .num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  .botcols .st{justify-self:end;}
+  .botth{border-bottom:1px solid var(--line);font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.13em;text-transform:uppercase;color:var(--faint);}
+  .botth .st{text-align:right;}
+  .botitem+.botitem{border-top:1px solid var(--line);}
+  .botrow{cursor:pointer;transition:background .12s ease;}
+  .botrow:hover{background:var(--surface-2);}
+  .botrow:focus-visible{outline:2px solid var(--amber);outline-offset:-2px;}
+  .botrow.up{box-shadow:inset 3px 0 0 var(--teal);}
+  .botrow.down{box-shadow:inset 3px 0 0 var(--brick);}
+  .botrow.flat{box-shadow:inset 3px 0 0 var(--muted);}
+  .botrow .sdot{width:8px;height:8px;border-radius:50%;background:var(--faint);}
+  .botrow.on .sdot{background:var(--teal);}
+  .bn{display:flex;align-items:baseline;gap:8px;min-width:0;}
+  .botnm{font-weight:700;font-size:13.5px;letter-spacing:-.01em;white-space:nowrap;}
+  .botds{font-family:var(--mono);font-size:10.5px;color:var(--muted);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .opct{font-family:var(--mono);font-size:9.5px;color:var(--amber);white-space:nowrap;
+    border:1px solid rgba(240,168,60,.35);border-radius:4px;padding:0 4px;}
+  .botcols .v{font-size:13.5px;font-weight:700;}
+  .botcols .wr{font-size:12.5px;color:var(--muted);}
+  .minispark{width:60px;height:18px;display:block;}
+  .nospark{font-family:var(--mono);font-size:11px;color:var(--faint);}
+  .chev{color:var(--faint);font-size:13px;line-height:1;transition:transform .15s ease;}
+  .botrow[aria-expanded="true"] .chev{transform:rotate(90deg);}
+  .botdet{display:grid;grid-template-columns:1.15fr 1fr;gap:12px 26px;padding:2px 16px 14px 27px;}
+  @media(max-width:900px){.botdet{grid-template-columns:1fr;}}
+  .botdet .label{display:block;margin-bottom:7px;}
+  .state{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
+    padding:2px 7px;border-radius:20px;border:1px solid var(--line);white-space:nowrap;}
   .state.run{color:var(--teal);border-color:rgba(63,199,168,.4);}
   .state.paused{color:var(--amber);border-color:rgba(240,168,60,.4);}
   .state.off{color:var(--brick);border-color:rgba(229,103,78,.4);}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px 10px;}
-  .metric .label{display:block;margin-bottom:4px;}
-  .metric .v{font-family:var(--mono);font-size:19px;font-weight:700;}
-  .sparkwrap{border-top:1px solid var(--line);padding-top:11px;}
-  .sparkwrap .label{display:block;margin-bottom:7px;}
   svg.spark{width:100%;height:40px;display:block;}
   .sparkempty{font-family:var(--mono);font-size:11px;color:var(--faint);}
-  .opens{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:7px;}
+  .opens{display:flex;flex-direction:column;gap:7px;}
   .opens .none{font-family:var(--mono);font-size:12px;color:var(--faint);}
   .pos-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12.5px;gap:8px;}
   .pos-row .p{color:var(--muted);}
   .tag{font-family:var(--mono);font-size:9.5px;padding:1px 5px;border-radius:4px;letter-spacing:.05em;}
   .tag.long{background:rgba(63,199,168,.16);color:var(--teal);}
   .tag.short{background:rgba(229,103,78,.16);color:var(--brick);}
-  /* --- bot-card visual upgrades --- */
-  .bot.up{box-shadow:inset 3px 0 0 var(--teal);}
-  .bot.down{box-shadow:inset 3px 0 0 var(--brick);}
-  .bot.flat{box-shadow:inset 3px 0 0 var(--muted);}
-  .metric .v{font-variant-numeric:tabular-nums;}
   .state .livedot{display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:middle;}
   .state.run .livedot{animation:livepulse 1.8s ease-in-out infinite;}
   @keyframes livepulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.82);}}
   @media(prefers-reduced-motion:reduce){.state.run .livedot{animation:none;}}
-  .watching{border-top:1px solid var(--line);margin-top:11px;padding-top:9px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;}
+  .watching{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;}
   .watching .wl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-right:4px;}
   .watching .wc{font-family:var(--mono);font-size:11.5px;color:var(--muted);}
   .watching .wc.on{color:var(--teal);font-weight:600;}
   .watching .wsep{color:var(--faint);font-size:10px;}
-  .winbar{height:4px;border-radius:2px;background:var(--line);margin-top:7px;max-width:76px;overflow:hidden;}
+  .winbar{height:2px;border-radius:2px;background:var(--line);margin:3px 0 0 auto;max-width:46px;overflow:hidden;}
   .winbar>i{display:block;height:100%;background:var(--teal);border-radius:2px;}
   .pos-row{font-variant-numeric:tabular-nums;}
   .pos-row .dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle;}
@@ -686,7 +714,11 @@ PAGE = r"""<!doctype html>
   .eqempty{font-family:var(--mono);font-size:13px;color:var(--faint);padding:34px 0;text-align:center;}
 
   .err{font-family:var(--mono);font-size:13px;color:var(--brick);padding:16px 0;}
-  @media(max-width:900px){.bots{grid-template-columns:1fr;}.board{grid-template-columns:repeat(3,1fr);}
+  /* narrow screens: shed the least-load-bearing columns (sparkline, trades, win)
+     rather than let the row wrap — balance and P&L are the two that must survive */
+  @media(max-width:900px){.board{grid-template-columns:repeat(3,1fr);}
+    .botcols{grid-template-columns:10px minmax(110px,2fr) 88px 92px 74px 12px;}
+    .botcols .c-spark,.botcols .c-trades,.botcols .c-win{display:none;}
     .totals{gap:22px;}.totals .big{font-size:21px;}}
   @media(max-width:520px){.board{grid-template-columns:repeat(2,1fr);}}
 </style></head>
@@ -1205,6 +1237,115 @@ function spark(vals){
       stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 
+/* ---- BOT TABLE ----
+   Design brief: the Bots block is the glance surface of the desk — "is anything
+   red / dead / not trading?" answered without scrolling. So the default row
+   carries only the decision-grade fields (status, name, 30d shape, wallet, P&L,
+   trades, win rate) and everything that used to bloat the tile (open positions,
+   watchlist, full-size equity chart) moves behind a click. Fixes: 11 bots no
+   longer overflow the viewport, and the numbers line up column-wise so bots can
+   be compared against each other instead of read one card at a time. */
+const BOT_GROUPS=[
+  ["Crypto",     ["Spot","Futures","Braked Hold","ApeX"]],
+  ["Short-term", ["Scalp","Day Trade"]],
+  ["Paper equity", ["S&P 500","Nifty 50","ONGC","ITC","BTC"]],
+];
+const botOpen=new Set();   // expanded rows, kept across the live re-render
+let _lastBots=[];          // so a toggle can repaint without waiting for /api/overview
+let _botsWired=false;
+
+// 60x18 row sparkline — shape only (is it grinding up or bleeding?); the full
+// 30-day chart with the last-value guide line still lives in the expand.
+function sparkmini(vals){
+  if(!vals||vals.length<2) return `<span class="nospark">—</span>`;
+  const w=60,h=18,pad=2, lo=Math.min(...vals), hi=Math.max(...vals), rng=(hi-lo)||1;
+  const pts=vals.map((v,i)=>((i/(vals.length-1))*w).toFixed(1)+","
+    +(pad+(h-2*pad)-((v-lo)/rng)*(h-2*pad)).toFixed(1)).join(" ");
+  const col=vals[vals.length-1]>=vals[0]?"var(--teal)":"var(--brick)";
+  return `<svg class="minispark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">`
+    +`<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.4"`
+    +` vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`;
+}
+
+function botDetail(b){
+  const opens=b.open.length?b.open.map(o=>
+    `<div class="pos-row"><span><i class="dot" style="background:${o.profit>=0?'var(--teal)':'var(--brick)'}"></i>${o.pair} <span class="tag ${o.dir.toLowerCase()}">${o.dir}</span></span>`
+    +`<span class="${cls(o.profit)}">${pct(o.profit)} <span class="p">·${money(o.stake)}</span></span></div>`).join("")
+    :`<div class="none">no open positions</div>`;
+  const openBases=new Set(b.open.map(o=>o.pair.split('/')[0]));
+  const watch=(b.watching&&b.watching.length)?
+    `<div class="watching">`
+    +b.watching.map(c=>`<span class="wc${openBases.has(c)?' on':''}">${c}${openBases.has(c)?' ●':''}</span>`).join('<span class="wsep">·</span>')
+    +`</div>`:`<div class="none" style="font-family:var(--mono);font-size:12px;color:var(--faint)">no whitelist reported</div>`;
+  return `<div class="botdet">
+      <div><span class="label">Open positions ${b.open.length?"("+b.open.length+")":""}</span>
+        <div class="opens">${opens}</div></div>
+      <div><span class="label">Watching ${b.watching?b.watching.length:0}</span>${watch}
+        <span class="label" style="margin-top:12px">30-day equity</span>${spark(b.equity)}</div>
+    </div>`;
+}
+
+function botRow(b){
+  const sc=!b.online?"off":b.state==="running"?"run":"paused";
+  const stxt=!b.online?"offline":b.state;
+  const health=!b.online?"flat":b.profit_pct>0.001?"up":b.profit_pct<-0.001?"down":"flat";
+  const parrow=b.profit_pct>0.001?"▲ ":b.profit_pct<-0.001?"▼ ":"";
+  const wr=b.trades?Math.round(b.winrate):0;
+  const ex=botOpen.has(b.name);
+  // "—" not "$0.00" when the bot never answered /balance: a fake zero reads as a
+  // real drained wallet (honest-failure rule)
+  const bal=b.has_balance?money(b.balance):"—";
+  return `<div class="botitem"><div class="botcols botrow ${health}${b.online?" on":""}" role="button" tabindex="0"
+      aria-expanded="${ex}" data-bot="${b.name}" title="${b.name} — click for open positions &amp; watchlist">
+      <i class="sdot"></i>
+      <span class="bn"><span class="botnm">${b.name}</span><span class="botds">${b.desc}</span>${b.open.length?`<span class="opct">${b.open.length} open</span>`:""}</span>
+      <span class="c-spark">${sparkmini(b.equity)}</span>
+      <span class="num v">${bal}</span>
+      <span class="num v ${cls(b.profit_pct)}">${parrow}${pct(b.profit_pct)}</span>
+      <span class="num wr c-trades">${b.trades}</span>
+      <span class="num wr c-win">${b.trades?wr+"%":"—"}${b.trades?`<div class="winbar"><i style="width:${Math.min(100,wr)}%"></i></div>`:""}</span>
+      <span class="st"><span class="state ${sc}"><i class="livedot"></i>${stxt}</span></span>
+      <span class="chev">›</span></div>${ex?botDetail(b):""}</div>`;
+}
+
+function renderBots(bots){
+  _lastBots=bots;
+  const byName=new Map(bots.map(b=>[b.name,b]));
+  const claimed=new Set();
+  const groups=BOT_GROUPS.map(([title,names])=>{
+    const members=names.map(n=>byName.get(n)).filter(Boolean);
+    members.forEach(b=>claimed.add(b.name));
+    return [title,members];
+  });
+  // any bot added to BOTS but not to a group still shows up — never silently drop one
+  const rest=bots.filter(b=>!claimed.has(b.name));
+  if(rest.length) groups.push(["Other",rest]);
+
+  $("bots").innerHTML=groups.filter(([,m])=>m.length).map(([title,members])=>{
+    const bal=members.reduce((s,b)=>s+(b.has_balance?b.balance:0),0);
+    const live=members.filter(b=>b.online).length;
+    const sum=`${live}/${members.length} live · ${money(bal)}`;
+    return `<div class="botgrp">
+      <div class="botgrphd"><span class="label">${title}</span><span class="gsum">${sum}</span></div>
+      <div class="botcols botth"><span></span><span>Bot</span><span>30d</span><span class="num">Wallet</span>
+        <span class="num">Closed P&amp;L</span><span class="num">Trades</span><span class="num">Win</span>
+        <span class="st">State</span><span></span></div>
+      ${members.map(botRow).join("")}</div>`;
+  }).join("");
+
+  if(!_botsWired){          // delegated once — innerHTML is replaced on every tick
+    const host=$("bots");
+    const toggle=el=>{const n=el.dataset.bot; botOpen.has(n)?botOpen.delete(n):botOpen.add(n); renderBots(_lastBots);};
+    host.addEventListener("click",e=>{const r=e.target.closest(".botrow"); if(r) toggle(r);});
+    host.addEventListener("keydown",e=>{
+      if(e.key!=="Enter"&&e.key!==" ") return;
+      const r=e.target.closest(".botrow"); if(!r) return;
+      e.preventDefault(); toggle(r);
+    });
+    _botsWired=true;
+  }
+}
+
 function drawEquityChart(hist){
   const cv=document.getElementById("eqchart"), empty=document.getElementById("eqempty");
   if(!hist || hist.length<2){
@@ -1275,33 +1416,7 @@ async function tick(){
       +`<span style="color:var(--muted)">peak equity ${money(d.guardian.peak)}</span>`;
 
     // bots
-    $("bots").innerHTML=d.bots.map(b=>{
-      const sc=!b.online?"off":b.state==="running"?"run":"paused";
-      const stxt=!b.online?"offline":b.state;
-      const health=!b.online?"":(b.profit_pct>0.001?"up":b.profit_pct<-0.001?"down":"flat");
-      const parrow=b.profit_pct>0.001?"▲ ":b.profit_pct<-0.001?"▼ ":"";
-      const wr=b.trades?Math.round(b.winrate):0;
-      const opens=b.open.length?b.open.map(o=>
-        `<div class="pos-row"><span><i class="dot" style="background:${o.profit>=0?'var(--teal)':'var(--brick)'}"></i>${o.pair} <span class="tag ${o.dir.toLowerCase()}">${o.dir}</span></span>`
-        +`<span class="${cls(o.profit)}">${pct(o.profit)} <span class="p">·${money(o.stake)}</span></span></div>`).join("")
-        :`<div class="none">no open positions</div>`;
-      const openBases=new Set(b.open.map(o=>o.pair.split('/')[0]));
-      const watch=(b.watching&&b.watching.length)?
-        `<div class="watching"><span class="wl">Watching ${b.watching.length}</span>`
-        +b.watching.map(c=>`<span class="wc${openBases.has(c)?' on':''}">${c}${openBases.has(c)?' ●':''}</span>`).join('<span class="wsep">·</span>')
-        +`</div>`:"";
-      return `<div class="bot ${health}"><div class="top">
-          <div><div class="nm">${b.name}</div><div class="ds">${b.desc}</div></div>
-          <span class="state ${sc}"><i class="livedot"></i>${stxt}</span></div>
-        <div class="grid2">
-          <div class="metric"><span class="label">Wallet</span><span class="v">${money(b.balance)}</span></div>
-          <div class="metric"><span class="label">Closed P&L</span><span class="v ${cls(b.profit_pct)}">${parrow}${pct(b.profit_pct)}</span></div>
-          <div class="metric"><span class="label">Trades</span><span class="v">${b.trades}</span></div>
-          <div class="metric"><span class="label">Win rate</span><span class="v">${b.trades?wr+"%":"—"}</span>${b.trades?`<div class="winbar"><i style="width:${Math.min(100,wr)}%"></i></div>`:""}</div>
-        </div>
-        <div class="sparkwrap"><span class="label">30-day equity</span>${spark(b.equity)}</div>
-        <div class="opens">${opens}</div>${watch}</div>`;
-    }).join("");
+    renderBots(d.bots);
 
     // brake board
     $("brakesum").textContent=d.brake_total?`${d.brake_hold} holding · ${d.brake_total-d.brake_hold} in cash`:"";
