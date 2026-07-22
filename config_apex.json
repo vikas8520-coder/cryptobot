@@ -11,6 +11,7 @@
     "margin_mode": "cross",
     "timeframe": "1h",
     "fee": 0.0005,
+    "synthetic": true,
     "unfilledtimeout": {
         "entry": 10,
         "exit": 10,

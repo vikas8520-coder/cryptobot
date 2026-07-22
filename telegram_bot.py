@@ -26,8 +26,10 @@ API = f"https://api.telegram.org/bot{TOK}"
 PYBIN = "/Users/vikasreddy/cryptobot/.venv/bin/python3"
 MONITOR = "/Users/vikasreddy/cryptobot/funding_monitor.py"
 
-BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081))]
-BOTS_BY_NAME = {"spot": (8080, api_pw(8080)), "futures": (8081, api_pw(8081))}
+BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081)),
+        ("ApeX", 8085, api_pw(8085))]
+BOTS_BY_NAME = {"spot": (8080, api_pw(8080)), "futures": (8081, api_pw(8081)),
+                "apex": (8085, api_pw(8085))}
 
 
 def redact(s):
@@ -283,10 +285,10 @@ def cmd_macro(args):
 def _resolve_bot(args):
     """Return (name, port, pw) from first arg, or None + error string."""
     if not args:
-        return None, "Which bot? Use `spot` or `futures`."
+        return None, "Which bot? Use `spot`, `futures`, or `apex`."
     name = args[0].lower()
     if name not in BOTS_BY_NAME:
-        return None, f"Unknown bot '{args[0]}'. Use `spot` or `futures`."
+        return None, f"Unknown bot '{args[0]}'. Use `spot`, `futures`, or `apex`."
     port, pw = BOTS_BY_NAME[name]
     return (name, port, pw), None
 
@@ -294,7 +296,7 @@ def _resolve_bot(args):
 def cmd_close(args):
     bot, err = _resolve_bot(args)
     if err:
-        return "❌ " + err + "\nUsage: /close <spot|futures> <trade_id|all>"
+        return "❌ " + err + "\nUsage: /close <spot|futures|apex> <trade_id|all>"
     name, port, pw = bot
     if len(args) < 2:
         return "❌ Which trade? Usage: /close " + name + " <trade_id|all>"
@@ -310,7 +312,7 @@ def cmd_close(args):
 def cmd_pause(args):
     bot, err = _resolve_bot(args)
     if err:
-        return "❌ " + err + "\nUsage: /pause <spot|futures>"
+        return "❌ " + err + "\nUsage: /pause <spot|futures|apex>"
     name, port, pw = bot
     r = api_post(port, pw, "stopentry")
     # never claim success on a failed call (audit: /pause lied when the bot was down)
@@ -324,7 +326,7 @@ def cmd_pause(args):
 def cmd_resume(args):
     bot, err = _resolve_bot(args)
     if err:
-        return "❌ " + err + "\nUsage: /resume <spot|futures>"
+        return "❌ " + err + "\nUsage: /resume <spot|futures|apex>"
     name, port, pw = bot
     r = api_post(port, pw, "reload_config")
     if not isinstance(r, dict) or r.get("error"):
@@ -360,9 +362,9 @@ HELP = ("🤖 TraderJoy commands:\n"
         "/memory – the brake's track record (holds & outcomes)\n"
         "/summary – everything at once\n"
         "— control —\n"
-        "/pause <spot|futures> – stop opening new trades\n"
-        "/resume <spot|futures> – re-enable new trades\n"
-        "/close <spot|futures> <id|all> – exit a trade now\n"
+        "/pause <spot|futures|apex> – stop opening new trades\n"
+        "/resume <spot|futures|apex> – re-enable new trades\n"
+        "/close <spot|futures|apex> <id|all> – exit a trade now\n"
         "/reset – clear the circuit breaker & resume\n"
         "/help – this list")
 
@@ -388,9 +390,9 @@ MENU = [
     ("memory", "brake track record (holds & outcomes)"),
     ("carry", "funding-carry status"),
     ("summary", "everything at once"),
-    ("pause", "stop new trades — add spot|futures"),
-    ("resume", "re-enable new trades — add spot|futures"),
-    ("close", "exit a trade — add spot|futures id|all"),
+    ("pause", "stop new trades — add spot|futures|apex"),
+    ("resume", "re-enable new trades — add spot|futures|apex"),
+    ("close", "exit a trade — add spot|futures|apex id|all"),
     ("reset", "clear the circuit breaker & resume"),
     ("help", "list all commands"),
 ]

@@ -114,14 +114,14 @@ def read_activity(limit=40):
 
 def read_equity():
     """Parse equity_history.csv into a list of {date, spot, futures, brakedhold,
-    btc_hold, basket_hold} with numeric (or null) values, for the dashboard chart."""
+    apex, btc_hold, basket_hold} with numeric (or null) values, for the dashboard chart."""
     if not os.path.exists(EQUITY_CSV):
         return []
     out = []
     try:
         for r in csv.DictReader(open(EQUITY_CSV)):
             row = {"date": r.get("date", "")}
-            for k in ("spot", "futures", "brakedhold", "btc_hold", "basket_hold"):
+            for k in ("spot", "futures", "brakedhold", "apex", "btc_hold", "basket_hold"):
                 v = r.get(k)
                 try:
                     row[k] = float(v) if v not in (None, "") else None
@@ -814,6 +814,7 @@ PAGE = r"""<!doctype html>
           <span><i style="background:var(--amber)"></i>Braked Hold</span>
           <span><i style="background:#6BA5E0"></i>Spot</span>
           <span><i style="background:#A98BE0"></i>Futures</span>
+          <span><i style="background:#f5a623"></i>ApeX</span>
           <span><i style="background:var(--brick)"></i>BTC hold</span>
           <span><i style="background:var(--teal)"></i>Basket hold</span>
         </div>
@@ -1207,6 +1208,7 @@ function drawEquityChart(hist){
     {k:"brakedhold",color:css("--amber"),lw:2.4,dash:[]},
     {k:"spot",color:"#6BA5E0",lw:1.5,dash:[]},
     {k:"futures",color:"#A98BE0",lw:1.5,dash:[]},
+    {k:"apex",color:"#f5a623",lw:1.5,dash:[]},
     {k:"btc_hold",color:css("--brick"),lw:1.5,dash:[5,4]},
     {k:"basket_hold",color:css("--teal"),lw:1.5,dash:[5,4]},
   ];
