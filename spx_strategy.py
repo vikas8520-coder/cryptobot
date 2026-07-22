@@ -87,7 +87,16 @@ class SpxStrategy:
         self._last_bar_ts = 0.0
         self._last_price = None
         self._daily = []           # daily closes for the optional DMA trend filter
-
+        # audit 2026-07-22: a cold REAL start left _last_price=None, so price()
+        # fell back to the synthetic 550 walk (547.87) and force-seed / first
+        # auto-entry sized off a fake price. Warm the real feed once at init
+        # (real mode only — synthetic mode owns its deterministic walk).
+        if not self.synthetic:
+            try:
+                self.refresh()
+            except Exception as e:
+                print(f"spx_strategy: init refresh failed ({type(e).__name__}: {e}); "
+                      f"keeping {len(self._closes)} cached closes", flush=True)
     # ---- real feed (called by the engine on its throttle, NEVER inside signal) ----
 
     def refresh(self):
