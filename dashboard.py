@@ -159,6 +159,7 @@ BOTS = [
     ("Braked Hold", 8082, api_pw(8082), "200-day brake · spot"),
     ("Scalp", 8083, api_pw(8083), "VWAP reversion · 5m LAB"),
     ("Day Trade", 8084, api_pw(8084), "Opening-range breakout · 1h LAB"),
+    ("ApeX", 8085, api_pw(8085), "ApeX Omni · DEX perps"),
 ]
 
 app = FastAPI(title="Trading Desk")
