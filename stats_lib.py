@@ -22,6 +22,7 @@ BOTS = {
     "brakedhold": ("Braked Hold (1d)",        "tradesv3_brakedhold.sqlite"),
     "scalp":      ("Scalp · VWAP 5m LAB",     "tradesv3_scalp.sqlite"),
     "daytrade":   ("Day Trade · ORB 1h LAB",  "tradesv3_daytrade.sqlite"),
+    "apex":       ("ApeX · Omni DEX",         "tradesv3_apex.sqlite"),
 }
 
 
