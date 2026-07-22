@@ -28,10 +28,10 @@ BRAKE_STATE = os.path.join(BASE, "brake_alert_state.json")
 START = 1000.0
 BOTS = [("spot", 8080, api_pw(8080)), ("futures", 8081, api_pw(8081)),
         ("brakedhold", 8082, api_pw(8082)), ("apex", 8085, api_pw(8085)),
-        ("spx", 8086, api_pw(8086))]
+        ("spx", 8086, api_pw(8086)), ("nifty", 8087, api_pw(8087))]
 BASKET = ["BTC", "ETH", "SOL", "XRP", "ADA", "LTC",
           "DOGE", "LINK", "BNB", "AVAX", "DOT", "TRX"]
-FIELDS = ["date", "spot", "futures", "brakedhold", "apex", "spx", "btc_hold", "basket_hold"]
+FIELDS = ["date", "spot", "futures", "brakedhold", "apex", "spx", "nifty", "btc_hold", "basket_hold"]
 
 
 def balance(port, pw):

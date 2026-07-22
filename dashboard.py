@@ -121,7 +121,7 @@ def read_equity():
     try:
         for r in csv.DictReader(open(EQUITY_CSV)):
             row = {"date": r.get("date", "")}
-            for k in ("spot", "futures", "brakedhold", "apex", "spx", "btc_hold", "basket_hold"):
+            for k in ("spot", "futures", "brakedhold", "apex", "spx", "nifty", "btc_hold", "basket_hold"):
                 v = r.get(k)
                 try:
                     row[k] = float(v) if v not in (None, "") else None
@@ -161,6 +161,7 @@ BOTS = [
     ("Day Trade", 8084, api_pw(8084), "Opening-range breakout · 1h LAB"),
     ("ApeX", 8085, api_pw(8085), "ApeX Omni · DEX perps"),
     ("S&P 500", 8086, api_pw(8086), "SMA cross · SPY paper"),
+    ("Nifty 50", 8087, api_pw(8087), "SMA cross · NIFTYBEES paper"),
 ]
 
 app = FastAPI(title="Trading Desk")
@@ -817,6 +818,7 @@ PAGE = r"""<!doctype html>
           <span><i style="background:#A98BE0"></i>Futures</span>
           <span><i style="background:#f5a623"></i>ApeX</span>
           <span><i style="background:#4ADE80"></i>S&amp;P 500</span>
+          <span><i style="background:#FF7AB6"></i>Nifty 50</span>
           <span><i style="background:var(--brick)"></i>BTC hold</span>
           <span><i style="background:var(--teal)"></i>Basket hold</span>
         </div>
@@ -1212,6 +1214,7 @@ function drawEquityChart(hist){
     {k:"futures",color:"#A98BE0",lw:1.5,dash:[]},
     {k:"apex",color:"#f5a623",lw:1.5,dash:[]},
     {k:"spx",color:"#4ADE80",lw:1.5,dash:[]},
+    {k:"nifty",color:"#FF7AB6",lw:1.5,dash:[]},
     {k:"btc_hold",color:css("--brick"),lw:1.5,dash:[5,4]},
     {k:"basket_hold",color:css("--teal"),lw:1.5,dash:[5,4]},
   ];

@@ -27,9 +27,11 @@ PYBIN = "/Users/vikasreddy/cryptobot/.venv/bin/python3"
 MONITOR = "/Users/vikasreddy/cryptobot/funding_monitor.py"
 
 BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081)),
-        ("ApeX", 8085, api_pw(8085)), ("S&P 500", 8086, api_pw(8086))]
+        ("ApeX", 8085, api_pw(8085)), ("S&P 500", 8086, api_pw(8086)),
+        ("Nifty 50", 8087, api_pw(8087))]
 BOTS_BY_NAME = {"spot": (8080, api_pw(8080)), "futures": (8081, api_pw(8081)),
-                "apex": (8085, api_pw(8085)), "spx": (8086, api_pw(8086))}
+                "apex": (8085, api_pw(8085)), "spx": (8086, api_pw(8086)),
+                "nifty": (8087, api_pw(8087))}
 
 
 def redact(s):
@@ -285,10 +287,10 @@ def cmd_macro(args):
 def _resolve_bot(args):
     """Return (name, port, pw) from first arg, or None + error string."""
     if not args:
-        return None, "Which bot? Use `spot`, `futures`, `apex`, or `spx`."
+        return None, "Which bot? Use `spot`, `futures`, `apex`, `spx`, or `nifty`."
     name = args[0].lower()
     if name not in BOTS_BY_NAME:
-        return None, f"Unknown bot '{args[0]}'. Use `spot`, `futures`, `apex`, or `spx`."
+        return None, f"Unknown bot '{args[0]}'. Use `spot`, `futures`, `apex`, `spx`, or `nifty`."
     port, pw = BOTS_BY_NAME[name]
     return (name, port, pw), None
 
@@ -362,9 +364,9 @@ HELP = ("🤖 TraderJoy commands:\n"
         "/memory – the brake's track record (holds & outcomes)\n"
         "/summary – everything at once\n"
         "— control —\n"
-        "/pause <spot|futures|apex|spx> – stop opening new trades\n"
-        "/resume <spot|futures|apex|spx> – re-enable new trades\n"
-        "/close <spot|futures|apex|spx> <id|all> – exit a trade now\n"
+        "/pause <spot|futures|apex|spx|nifty> – stop opening new trades\n"
+        "/resume <spot|futures|apex|spx|nifty> – re-enable new trades\n"
+        "/close <spot|futures|apex|spx|nifty> <id|all> – exit a trade now\n"
         "/reset – clear the circuit breaker & resume\n"
         "/help – this list")
 
@@ -390,9 +392,9 @@ MENU = [
     ("memory", "brake track record (holds & outcomes)"),
     ("carry", "funding-carry status"),
     ("summary", "everything at once"),
-    ("pause", "stop new trades — add spot|futures|apex|spx"),
-    ("resume", "re-enable new trades — add spot|futures|apex|spx"),
-    ("close", "exit a trade — add spot|futures|apex|spx id|all"),
+    ("pause", "stop new trades — add spot|futures|apex|spx|nifty"),
+    ("resume", "re-enable new trades — add spot|futures|apex|spx|nifty"),
+    ("close", "exit a trade — add spot|futures|apex|spx|nifty id|all"),
     ("reset", "clear the circuit breaker & resume"),
     ("help", "list all commands"),
 ]
