@@ -121,7 +121,7 @@ def create_app(state):
             "stake_amount": str(cfg.get("stake_amount", "unlimited")),
             "available_capital": _f(snap["balance"]),
             "stake_currency_decimals": 3,
-            "exchange": "apex",
+            "exchange": str((cfg.get("exchange") or {}).get("name", "apex")),
             "bot_name": str(cfg.get("bot_name", "cryptobot-apex")),
             "timeframe": str(cfg.get("timeframe", "1h")),
             "timeframe_ms": 3600000,
