@@ -29,11 +29,12 @@ MONITOR = "/Users/vikasreddy/cryptobot/funding_monitor.py"
 BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081)),
         ("ApeX", 8085, api_pw(8085)), ("S&P 500", 8086, api_pw(8086)),
         ("Nifty 50", 8087, api_pw(8087)),
-        ("ONGC", 8088, api_pw(8088)), ("ITC", 8089, api_pw(8089))]
+        ("ONGC", 8088, api_pw(8088)), ("ITC", 8089, api_pw(8089)),
+        ("BTC", 8091, api_pw(8091))]   # 8091, NOT 8090 — 8090 is the dashboard
 BOTS_BY_NAME = {"spot": (8080, api_pw(8080)), "futures": (8081, api_pw(8081)),
                 "apex": (8085, api_pw(8085)), "spx": (8086, api_pw(8086)),
                 "nifty": (8087, api_pw(8087)), "ongc": (8088, api_pw(8088)),
-                "itc": (8089, api_pw(8089))}
+                "itc": (8089, api_pw(8089)), "btc": (8091, api_pw(8091))}
 # The help/menu strings below list these names verbatim; a bot added here and NOT there is
 # a bot the user can never reach from Telegram.
 BOT_NAMES = "|".join(BOTS_BY_NAME)

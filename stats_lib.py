@@ -27,6 +27,7 @@ BOTS = {
     "nifty":      ("Nifty 50 · NIFTYBEES paper", "tradesv3_nifty.sqlite"),
     "ongc":       ("ONGC · dividend",          "tradesv3_ongc.sqlite"),
     "itc":        ("ITC · dividend",           "tradesv3_itc.sqlite"),
+    "btc":        ("BTC · paper",              "tradesv3_btc.sqlite"),
 }
 
 
