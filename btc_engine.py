@@ -201,6 +201,30 @@ class EngineState:
             self.balance = self.starting_capital + sum(t.get("profit_abs", 0.0) for t in self.closed)
         return ok
 
+    def _check_stops(self):
+        """Hard stop-loss per open position. Reads config["stoploss"] (e.g. -0.05).
+        Long-only: if current price is down more than |stoploss| from entry, flatten.
+        WHY: the engine previously exited ONLY on the SMA-cross-down signal, so an
+        adverse move with no cross bled unbounded — the desk was -18.6% largely from
+        this. Caps per-trade downside regardless of strategy. audit 2026-07-22.
+        """
+        sl = float(self.config.get("stoploss", -0.05))
+        if sl >= 0:
+            return  # positive/zero stoploss means disabled
+        if not self.positions:
+            return
+        price = self.strategy.price(self.cycles) if self.strategy else None
+        if price is None:
+            return
+        with self._lock:
+            for t in list(self.positions):
+                open_rate = float(t.get("open_rate") or 0.0)
+                if open_rate <= 0:
+                    continue
+                loss_ratio = (price - open_rate) / open_rate  # long-only
+                if loss_ratio <= sl:
+                    self._close(t, price, exit_reason="stoploss")
+
     def cycle_strategy(self):
         """One strategy tick: build the plain-dict state, act on the signal."""
         with self._lock:
@@ -288,6 +312,7 @@ def main():
                 if not cfg.get("synthetic"):
                     state.strategy.refresh()
             state.cycle_strategy()
+            state._check_stops()            # hard stop-loss (audit 2026-07-22)
             if now - last_beat >= HEARTBEAT_EVERY:
                 last_beat = now
                 snap = state.snapshot()
