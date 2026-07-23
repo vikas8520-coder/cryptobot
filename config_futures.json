@@ -1,6 +1,10 @@
 {
     "$schema": "https://schema.freqtrade.io/schema.json",
     "max_open_trades": 3,
+    "stoploss": -0.05,
+    "trailing_stop": true,
+    "trailing_stop_positive": 0.02,
+    "trailing_stop_positive_offset": 0.03,
     "stake_currency": "USDT",
     "stake_amount": 100,
     "tradable_balance_ratio": 0.99,
