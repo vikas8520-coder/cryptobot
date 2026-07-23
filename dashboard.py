@@ -126,7 +126,7 @@ def read_equity():
     try:
         for r in csv.DictReader(open(EQUITY_CSV)):
             row = {"date": r.get("date", "")}
-            for k in ("spot", "futures", "brakedhold", "apex", "spx", "nifty", "ongc", "itc",
+            for k in ("spot", "futures", "brakedhold", "spx", "nifty", "ongc", "itc",
                       "btc", "btc_hold", "basket_hold"):
                 v = r.get(k)
                 try:
@@ -165,7 +165,9 @@ BOTS = [
     ("Braked Hold", 8082, api_pw(8082), "200-day brake · spot"),
     ("Scalp", 8083, api_pw(8083), "VWAP reversion · 5m LAB"),
     ("Day Trade", 8084, api_pw(8084), "Opening-range breakout · 1h LAB"),
-    ("ApeX", 8085, api_pw(8085), "ApeX Omni · DEX perps"),
+    # ApeX removed 2026-07-23: synthetic-only paper engine whose balance inflated the
+    # real-money headline to +2641%/$301k (synthetic price-path bug, not real capital).
+    # Kept out of BOTS so the dashboard stops polling :8085 and the combined total is honest.
     ("S&P 500", 8086, api_pw(8086), "SMA cross · SPY paper"),
     ("Nifty 50", 8087, api_pw(8087), "SMA cross · NIFTYBEES paper"),
     ("ONGC", 8088, api_pw(8088), "Dividend · ONGC 7.4%"),
@@ -872,7 +874,6 @@ PAGE = r"""<!doctype html>
           <span><i style="background:var(--amber)"></i>Braked Hold</span>
           <span><i style="background:#6BA5E0"></i>Spot</span>
           <span><i style="background:#A98BE0"></i>Futures</span>
-          <span><i style="background:#f5a623"></i>ApeX</span>
           <span><i style="background:#4ADE80"></i>S&amp;P 500</span>
           <span><i style="background:#FF7AB6"></i>Nifty 50</span>
           <span><i style="background:#FFB347"></i>ONGC</span>
@@ -1265,7 +1266,7 @@ function spark(vals){
    longer overflow the viewport, and the numbers line up column-wise so bots can
    be compared against each other instead of read one card at a time. */
 const BOT_GROUPS=[
-  ["Crypto",     ["Spot","Futures","Braked Hold","ApeX"]],
+  ["Crypto",     ["Spot","Futures","Braked Hold"]],
   ["Short-term", ["Scalp","Day Trade"]],
   ["Paper equity", ["S&P 500","Nifty 50","ONGC","ITC","BTC"]],
 ];
@@ -1380,7 +1381,7 @@ function drawEquityChart(hist){
     {k:"brakedhold",color:css("--amber"),lw:2.4,dash:[]},
     {k:"spot",color:"#6BA5E0",lw:1.5,dash:[]},
     {k:"futures",color:"#A98BE0",lw:1.5,dash:[]},
-    {k:"apex",color:"#f5a623",lw:1.5,dash:[]},
+    # apex series removed 2026-07-23 (bot retired; see BOTS list)
     {k:"spx",color:"#4ADE80",lw:1.5,dash:[]},
     {k:"nifty",color:"#FF7AB6",lw:1.5,dash:[]},
     {k:"ongc",color:"#FFB347",lw:1.5,dash:[]},
