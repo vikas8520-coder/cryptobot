@@ -1,6 +1,6 @@
 {
     "$schema": "https://schema.freqtrade.io/schema.json",
-    "max_open_trades": 3,
+    "max_open_trades": 2,
     "stake_currency": "USDT",
     "stake_amount": 100,
     "tradable_balance_ratio": 0.99,
@@ -42,10 +42,7 @@
         "pair_whitelist": [
             "BTC/USDT",
             "ETH/USDT",
-            "SOL/USDT",
-            "XRP/USDT",
-            "ADA/USDT",
-            "LTC/USDT"
+            "SOL/USDT"
         ],
         "pair_blacklist": [
             ".*(UP|DOWN|BULL|BEAR)/.*"
@@ -78,5 +75,10 @@
     },
     "add_config_files": [
         "config.secret.json"
-    ]
+    ],
+    "stoploss": -0.08,
+    "trailing_stop": true,
+    "trailing_stop_positive": 0.03,
+    "trailing_stop_positive_offset": 0.06,
+    "trailing_only_offset_is_reached": true
 }

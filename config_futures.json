@@ -1,10 +1,10 @@
 {
     "$schema": "https://schema.freqtrade.io/schema.json",
-    "max_open_trades": 3,
-    "stoploss": -0.05,
+    "max_open_trades": 2,
+    "stoploss": -0.08,
     "trailing_stop": true,
-    "trailing_stop_positive": 0.02,
-    "trailing_stop_positive_offset": 0.03,
+    "trailing_stop_positive": 0.03,
+    "trailing_stop_positive_offset": 0.06,
     "stake_currency": "USDT",
     "stake_amount": 100,
     "tradable_balance_ratio": 0.99,
@@ -39,12 +39,10 @@
         "ccxt_config": {},
         "ccxt_async_config": {},
         "pair_whitelist": [
-            "DOGE/USDT:USDT",
-            "AVAX/USDT:USDT",
             "LINK/USDT:USDT",
-            "DOT/USDT:USDT",
-            "NEAR/USDT:USDT",
-            "ATOM/USDT:USDT"
+            "AVAX/USDT:USDT",
+            "LTC/USDT:USDT",
+            "ADA/USDT:USDT"
         ],
         "pair_blacklist": []
     },
@@ -70,5 +68,6 @@
     },
     "add_config_files": [
         "config_futures.secret.json"
-    ]
+    ],
+    "trailing_only_offset_is_reached": true
 }
