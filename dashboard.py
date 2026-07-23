@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-22c"
+DASH_VERSION = "2026-07-23a"
 import csv
 from local_secrets import api_pw
 import json
@@ -1381,7 +1381,7 @@ function drawEquityChart(hist){
     {k:"brakedhold",color:css("--amber"),lw:2.4,dash:[]},
     {k:"spot",color:"#6BA5E0",lw:1.5,dash:[]},
     {k:"futures",color:"#A98BE0",lw:1.5,dash:[]},
-    # apex series removed 2026-07-23 (bot retired; see BOTS list)
+    // apex series removed 2026-07-23 (bot retired; see BOTS list)
     {k:"spx",color:"#4ADE80",lw:1.5,dash:[]},
     {k:"nifty",color:"#FF7AB6",lw:1.5,dash:[]},
     {k:"ongc",color:"#FFB347",lw:1.5,dash:[]},
