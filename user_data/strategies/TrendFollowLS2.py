@@ -26,14 +26,18 @@ class TrendFollowLS2(IStrategy):
     timeframe = "4h"    # slowed from 1h (2026-07-20) to cut over-trading — fewer, higher-conviction decisions
 
     minimal_roi = {"0": 10}
-    stoploss = -0.10
+    # audit 2026-07-23: live futures paper was 5W/41L PF 0.16. Nearly all force-exits
+    # + signal-loss; cut hard-stop to 8% and arm trailing earlier so small wins lock.
+    stoploss = -0.08
     trailing_stop = True
-    trailing_stop_positive = 0.05
-    trailing_stop_positive_offset = 0.10
+    trailing_stop_positive = 0.03
+    trailing_stop_positive_offset = 0.06
     trailing_only_offset_is_reached = True
 
     process_only_new_candles = True
     startup_candle_count = 220   # BTC EMA200 + confirmation candles
+    # Minimum ADX for entry (was hard-coded 20; too many weak-trend whipsaws).
+    ADX_MIN = 25
 
     # Wall-clock duration BTC must stay bearish before shorts turn on. Kept in
     # HOURS (not candles) so a timeframe change doesn't silently change the
@@ -51,7 +55,10 @@ class TrendFollowLS2(IStrategy):
         dataframe["ema_fast"] = ta.EMA(dataframe, timeperiod=20)
         dataframe["ema_slow"] = ta.EMA(dataframe, timeperiod=50)
         dataframe["ema_trend"] = ta.EMA(dataframe, timeperiod=100)
+        # 200-EMA tide filter (audit 2026-07-23): long only above, short only below.
+        dataframe["ema200"] = ta.EMA(dataframe, timeperiod=200)
         dataframe["adx"] = ta.ADX(dataframe, timeperiod=14)
+        dataframe["vol_ma"] = dataframe["volume"].rolling(20).mean()
 
         # merge_informative_pair appends "_{timeframe_inf}" to every merged column,
         # so the column name must track self.timeframe (which config.json can override).
@@ -80,26 +87,30 @@ class TrendFollowLS2(IStrategy):
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        # LONG — unchanged
+        # LONG — trend stack + above 200-EMA + stronger ADX + volume (audit 2026-07-23)
         dataframe.loc[
             (
                 (dataframe["close"] > dataframe["ema_fast"])
                 & (dataframe["ema_fast"] > dataframe["ema_slow"])
                 & (dataframe["ema_slow"] > dataframe["ema_trend"])
-                & (dataframe["adx"] > 20)
+                & (dataframe["close"] > dataframe["ema200"])
+                & (dataframe["adx"] > self.ADX_MIN)
+                & (dataframe["volume"] > dataframe["vol_ma"])
                 & (dataframe["volume"] > 0)
             ),
             "enter_long",
         ] = 1
 
-        # SHORT — bearish stack AND market confirmed in a downtrend
+        # SHORT — bearish stack AND market confirmed in a downtrend AND below 200-EMA
         dataframe.loc[
             (
                 (dataframe[f"btc_short_ok_{self.timeframe}"] == 1)
                 & (dataframe["close"] < dataframe["ema_fast"])
                 & (dataframe["ema_fast"] < dataframe["ema_slow"])
                 & (dataframe["ema_slow"] < dataframe["ema_trend"])
-                & (dataframe["adx"] > 20)
+                & (dataframe["close"] < dataframe["ema200"])
+                & (dataframe["adx"] > self.ADX_MIN)
+                & (dataframe["volume"] > dataframe["vol_ma"])
                 & (dataframe["volume"] > 0)
             ),
             "enter_short",
@@ -110,7 +121,8 @@ class TrendFollowLS2(IStrategy):
         dataframe.loc[
             (
                 ((dataframe["ema_fast"] < dataframe["ema_slow"])
-                 | (dataframe["close"] < dataframe["ema_slow"]))
+                 | (dataframe["close"] < dataframe["ema_slow"])
+                 | (dataframe["close"] < dataframe["ema200"]))
                 & (dataframe["volume"] > 0)
             ),
             "exit_long",
@@ -118,7 +130,8 @@ class TrendFollowLS2(IStrategy):
         dataframe.loc[
             (
                 ((dataframe["ema_fast"] > dataframe["ema_slow"])
-                 | (dataframe["close"] > dataframe["ema_slow"]))
+                 | (dataframe["close"] > dataframe["ema_slow"])
+                 | (dataframe["close"] > dataframe["ema200"]))
                 & (dataframe["volume"] > 0)
             ),
             "exit_short",
