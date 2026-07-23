@@ -18,7 +18,6 @@ from local_secrets import api_pw
 import json
 import os
 import paper_fx                 # [PAPER EQUITY] INR->USD for the combined headline
-import re
 
 import requests
 import uvicorn
@@ -30,36 +29,10 @@ from fastapi.staticfiles import StaticFiles
 BASE = os.path.dirname(os.path.abspath(__file__))
 GUARD = os.path.join(BASE, "guard_state.json")
 BRAKE_STATE = os.path.join(BASE, "brake_alert_state.json")
-FUND_LOG = os.path.join(BASE, "funding_monitor.log")
 EQUITY_CSV = os.path.join(BASE, "equity_history.csv")
-MACRO_STATE = os.path.join(BASE, "macro_alert_state.json")
-MACRO_WATCH = os.path.join(BASE, "macro_watchlist.json")
-TREND_BOARD = os.path.join(BASE, "trendline_board.json")
 PORTFOLIO_BOARD = os.path.join(BASE, "diversified_brake_board.json")
 ACTIVITY_FEED = os.path.join(BASE, "activity_feed.jsonl")
 START_EACH = 1000.0
-
-
-def read_macro():
-    """Cached macro brake board (stocks/bonds/gold) from the 6h macro job."""
-    if not os.path.exists(MACRO_STATE):
-        return []
-    try:
-        state = json.load(open(MACRO_STATE))
-        names = {}
-        if os.path.exists(MACRO_WATCH):
-            for a in json.load(open(MACRO_WATCH)).get("assets", []):
-                names[a["symbol"]] = a["name"]
-        out = []
-        for sym, d in state.items():
-            price, sma = d.get("price", 0), d.get("sma", 0)
-            out.append({"symbol": sym, "name": names.get(sym, sym),
-                        "state": d.get("state"), "price": price,
-                        "gap": ((price / sma - 1) * 100) if sma else 0})
-        out.sort(key=lambda x: (x["state"] != "above", -x["gap"]))
-        return out
-    except Exception:
-        return []
 
 
 def _job_paused(job):
@@ -69,23 +42,6 @@ def _job_paused(job):
     badge. Self-clears the moment the job is re-enabled (plist back in LaunchAgents)."""
     return not os.path.exists(
         os.path.expanduser(f"~/Library/LaunchAgents/com.vikas.{job}.plist"))
-
-
-def read_trend():
-    """Cached trendline board (Tori's valid-line filters) from the 4h trendline job.
-    Returns {updated, source, coins:[...]} or empty. Setups (bounce/break/reject)
-    sort to the top; 'inside channel' coins fall below."""
-    if not os.path.exists(TREND_BOARD):
-        return {}
-    try:
-        d = json.load(open(TREND_BOARD))
-        coins = d.get("coins", [])
-        coins.sort(key=lambda c: (c.get("signal") is None, c.get("coin")))
-        d["coins"] = coins
-        d["_paused"] = _job_paused("trendline")
-        return d
-    except Exception:
-        return {}
 
 
 def read_portfolio():
@@ -141,26 +97,6 @@ def read_equity():
         pass
     return out
 
-
-def funding_status():
-    """Read the cached funding-carry line the daily job appends (never computes
-    live — that takes ~60s). Line shape: '2026-07-17 09:14 | AVG 4.0% 1.0%'."""
-    if not os.path.exists(FUND_LOG):
-        return None
-    try:
-        lines = [l for l in open(FUND_LOG).read().splitlines() if l.strip()]
-        if not lines:
-            return None
-        last = lines[-1]
-        when = last.split("|")[0].strip()
-        nums = re.findall(r"([\d.]+)%", last)
-        if len(nums) < 2:
-            return None
-        gross, net = float(nums[0]), float(nums[1])
-        verdict = "STRONG" if gross >= 20 else "MODEST" if gross >= 10 else "SKIP"
-        return {"gross": gross, "net": net, "verdict": verdict, "when": when}
-    except Exception:
-        return None
 
 BOTS = [
     ("Spot", 8080, api_pw(8080), "Trend-follow · spot"),
@@ -426,12 +362,9 @@ def overview():
             "peak": g.get("peak_balance", 0) or 0,
         },
         "brake": brake, "brake_hold": hold, "brake_total": len(brake),
-        "macro": read_macro(),
-        "trend": read_trend(),
         "portfolio": read_portfolio(),
         "activity": read_activity(),
         "memory": mem,
-        "funding": funding_status(),
         "equity_history": read_equity(),
     })
 
@@ -508,7 +441,6 @@ PAGE = r"""<!doctype html>
   @media(min-width:1200px){.deskgrid{grid-template-columns:1.65fr 1fr;align-items:start;}}
   .deskmain{min-width:0;} .deskrail{min-width:0;}
   .deskrail .board{grid-template-columns:repeat(3,minmax(0,1fr));}
-  .deskrail .macroboard{grid-template-columns:1fr 1fr;}
   .deskrail .brakehead:first-child .sec, .deskmain > .sec:first-child{margin-top:0!important;}
   .panelrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-top:26px;}
   .panelrow > div{min-width:0;}
@@ -685,12 +617,6 @@ PAGE = r"""<!doctype html>
   .charttip .tt-row{display:flex;justify-content:space-between;gap:16px;margin:2px 0;color:var(--muted);}
   .charttip .tt-row b{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums;}
   .charttip .tt-status{margin-top:6px;padding-top:5px;border-top:1px solid var(--line);font-weight:700;}
-  .macroboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:9px;}
-  .macroboard .coin .c{font-size:13px;}
-  @media(max-width:520px){.macroboard{grid-template-columns:1fr 1fr;}}
-  .trendboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:9px;}
-  .trendboard .coin .c{font-size:13px;}
-  @media(max-width:520px){.trendboard{grid-template-columns:1fr;}}
   .pfcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
   .pfhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
   .pfhead .dep{font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;}
@@ -857,18 +783,6 @@ PAGE = r"""<!doctype html>
   </div>
   <div class="board" id="board"></div>
 
-  <div class="brakehead" style="margin-top:26px">
-    <h2 class="sec">Macro brake · stocks / bonds / gold</h2>
-    <span class="label" id="macrosum"></span>
-  </div>
-  <div class="board macroboard" id="macroboard"></div>
-
-  <div class="brakehead" style="margin-top:26px">
-    <h2 class="sec">Trendline setups · Filters</h2>
-    <span class="label" id="trendsum"></span>
-  </div>
-  <div class="board trendboard" id="trendboard"></div>
-
   <div class="panelrow">
     <div>
       <h2 class="sec">Equity vs buy &amp; hold</h2>
@@ -892,10 +806,6 @@ PAGE = r"""<!doctype html>
     <div>
       <h2 class="sec">Brake memory · track record</h2>
       <div class="mem" id="memory"></div>
-    </div>
-    <div>
-      <h2 class="sec">Funding carry · yield</h2>
-      <div class="fund" id="funding"></div>
     </div>
   </div>
 
@@ -1451,16 +1361,6 @@ async function tick(){
         <div class="g" style="color:var(--faint)">${price(c.price)}</div></div>`;
     }).join(""):`<div class="none mono" style="color:var(--faint)">brake state not yet cached — the hourly job populates it</div>`;
 
-    // macro brake board
-    const macro=d.macro||[];
-    $("macrosum").textContent=macro.length?`${macro.filter(x=>x.state==="above").length} holding · ${macro.filter(x=>x.state!=="above").length} in cash`:"";
-    $("macroboard").innerHTML=macro.length?macro.map(c=>{
-      const hold=c.state==="above";
-      return `<div class="coin ${hold?"hold":"cash"}">
-        <div class="c"><i class="s" style="background:${hold?"var(--teal)":"var(--brick)"}"></i>${c.name}</div>
-        <div class="g ${hold?"pos":"neg"}">${hold?"HOLD":"CASH"} ${(c.gap>=0?"+":"")+c.gap.toFixed(0)}%</div></div>`;
-    }).join(""):`<div class="none mono" style="color:var(--faint)">macro state not yet cached — the 6h job populates it</div>`;
-
     // shared "frozen" badge: these panels read CACHED board files, so when the
     // generating job is paused (2026-07-20 simplification) the panel is truly stale.
     const fbadge=(iso)=>{
@@ -1469,28 +1369,6 @@ async function tick(){
       return `<div class="mono" style="font-size:11px;color:var(--amber);`
         +`border:1px solid rgba(240,168,60,.35);border-radius:6px;padding:4px 8px;margin-bottom:8px">`
         +`⏸ FROZEN — auto-monitor paused${w}. For a live reading use Telegram /trend · /portfolio</div>`;};
-
-    // trendline board (Tori's valid-line filters)
-    const tb=(d.trend&&d.trend.coins)||[];
-    const setups=tb.filter(c=>c.signal);
-    const meta={BOUNCE_LONG:["🟢","bounce","var(--teal)","pos"],
-                BREAK_UP:["🚀","breakout","var(--teal)","pos"],
-                BREAK_DOWN:["🔴","breakdown","var(--brick)","neg"],
-                REJECT_SHORT:["⚠️","rejected","var(--amber)","neg"]};
-    $("trendsum").textContent=tb.length?`${setups.length} setup${setups.length===1?"":"s"} · ${tb.length-setups.length} inside channel`:"";
-    const tfrozen=(d.trend&&d.trend._paused)?fbadge(d.trend.updated):"";
-    $("trendboard").innerHTML=tfrozen+(tb.length?tb.map(c=>{
-      if(!c.signal){
-        return `<div class="coin" style="opacity:.55">
-          <div class="c"><i class="s" style="background:var(--faint)"></i>${c.coin}</div>
-          <div class="g" style="color:var(--faint)">inside channel</div>
-          <div class="g" style="color:var(--faint)">${price(c.close)}</div></div>`;}
-      const mt=meta[c.signal]||["•","",'var(--faint)',""];
-      return `<div class="coin" style="border-left:3px solid ${mt[2]}">
-        <div class="c"><i class="s" style="background:${mt[2]}"></i>${c.coin} <span style="color:var(--faint);font-weight:600">${mt[0]} ${mt[1]}</span></div>
-        <div class="g ${mt[3]}">${price(c.entry)} → ${price(c.target)} <span style="color:var(--faint)">(${c.rr}R)</span></div>
-        <div class="g" style="color:var(--faint)">stop ${price(c.stop)} · ${c.touches} touches</div></div>`;
-    }).join(""):`<div class="none mono" style="color:var(--faint)">trendline board not yet cached — the 4h job populates it</div>`);
 
     // diversified braked portfolio map — India (tradeable) + US (reference)
     const pf=d.portfolio||{};
@@ -1564,22 +1442,6 @@ async function tick(){
       $("memory").innerHTML=`<span class="none">memory not available</span>`;
     }
 
-    // funding carry
-    const f=d.funding;
-    if(f){
-      const vc=f.verdict.toLowerCase();
-      const hint=f.verdict==="STRONG"?"Attractive — market-neutral yield worth considering."
-        :f.verdict==="MODEST"?"Middling — only worth it with idle capital."
-        :"Not worth deploying — carry is compressed right now.";
-      $("funding").innerHTML=
-        `<span class="verdict ${vc}">${f.verdict}</span>`
-        +`<div class="fm"><span class="label">Gross carry</span><span class="v">${f.gross.toFixed(1)}%</span></div>`
-        +`<div class="fm"><span class="label">Net (after costs)</span><span class="v ${f.net>0?'pos':''}">${f.net.toFixed(1)}%</span></div>`
-        +`<div class="fm"><span class="label">As of</span><span class="v" style="font-size:13px">${f.when}</span></div>`
-        +`<span class="hint">${hint} Checked daily 9am.</span>`;
-    } else {
-      $("funding").innerHTML=`<span class="none mono" style="color:var(--faint)">no funding reading yet — the daily 9am job populates it</span>`;
-    }
   }catch(e){
     $("err").hidden=false; $("err").textContent="⚠️ can't reach the desk API: "+e.message;
     $("upd").textContent="disconnected"; $("livedot").style.background="var(--brick)";
