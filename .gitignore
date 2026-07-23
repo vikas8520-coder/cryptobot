@@ -43,3 +43,6 @@ apex_creds.json
 paper_scorecard.csv
 paper_scorecard.out
 paper_scorecard.err
+
+# --- Diversified-brake runtime queue (regenerated each run) ---
+diversified_brake_pending.json
