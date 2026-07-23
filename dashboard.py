@@ -94,7 +94,10 @@ def read_portfolio():
         return {}
     try:
         d = json.load(open(PORTFOLIO_BOARD))
-        d["_paused"] = _job_paused("divbrake")
+        # audit 2026-07-23: job was renamed divbrake -> diversified_brake on 07-20;
+        # the old label left the panel permanently FROZEN (probed a plist that now
+        # lives in disabled_plists/) even though the generator is loaded and active.
+        d["_paused"] = _job_paused("diversified_brake")
         return d
     except Exception:
         return {}

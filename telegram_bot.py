@@ -194,8 +194,10 @@ def cmd_portfolio(args):
         m = d.build_map()
         if not m:
             return "❌ Not enough data right now — try again shortly."
+        # audit 2026-07-23: use the current job label (renamed from divbrake on
+        # 07-20) so the note self-clears while diversified_brake is active.
         return d.portfolio_text(m) + _paused_note(
-            "divbrake", "diversified_brake_board.json", "map",
+            "diversified_brake", "diversified_brake_board.json", "map",
             "you're no longer auto-pinged when the allocation changes")
     except Exception as e:
         return f"❌ portfolio error: {type(e).__name__}: {e}"
