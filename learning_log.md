@@ -676,3 +676,34 @@ train-only "win" was overfit, confirmed by walk-forward.** (~96 backtests, offli
 - The brake is already healthy (BTC +33.86%/PF6.80 post-fix). A buffer is a minor refinement (churn reduction), not a fix. **No deploy needed during freeze.** Revisit post-freeze if churn/tax matters.
 
 **All gaps closed:** (A) equity runner moved to `user_data/backtest_equity/` (version-controlled, runs); (B) reproducibility note added to stale command blocks; (C) scalp + brakedhold-buffer verdicts recorded. Backtest lab is now complete + reproducible.
+
+### SCALP DIAGNOSIS (2026-07-23 — WHY ScalpVwap5m loses; now a lab diagnostic)
+
+**Question:** scalp baseline lost -65.94% / PF0.54 / DD66% / 2465 trades (5m, max data).
+Is it FEES, bad LOGIC, or REGIME?
+
+**Method:** fee-isolation — re-run with `--fee 0` (removes the 0.1%/side drag) and
+compare. Reusable driver: `user_data/scalp_diag.py` (runs real-fee vs zero-fee on
+TRAIN/HOLD/FULL, prints verdict).
+
+| window | fee | TotProfit% | PF | trades |
+|---|---|---|---|---|
+| FULL | 0.001 (real) | -65.94% | 0.54 | 2465 |
+| FULL | **0.0** | **-17.94%** | **0.85** | 2512 |
+| TRAIN | real | -61.6% | — | — |
+| HOLD | real | -4.4% | 0.37 | 139 |
+
+**Verdict: LOGIC is net-negative, FEES amplify it.** Even at zero fee the strategy loses
+-17.94% / PF0.85 — so the VWAP-band mean-reversion has negative GROSS expectancy. Fees
+(0.2% round-trip × 2465 trades ≈ 493% cumulative drag on break-even capital) turn -18%
+into -66%, but they don't cause the loss. The strategy's own docstring predicted
+"marginal after fees" — reality is worse: negative even free.
+
+**Regime:** loses across the board (train -61.6%, hold-out -4.4%). Not a pure regime
+effect — structurally negative. Hold-out is less bad only because 2026 H1 was rangey.
+
+**Conclusion:** scalp is NOT a fee problem to patch — it's a negative-expectancy core.
+Options: (a) drop scalp from the test, (b) redesign (wider band / different edge), or
+(c) accept it as the honest "best-available scalp still loses" data point. No live config
+change needed (config_scalp.json was already restored to stoploss -0.02, no trailing —
+same bug class as brakedhold, fixed earlier). Diagnostic is reproducible via scalp_diag.py.
