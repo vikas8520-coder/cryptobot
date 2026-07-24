@@ -845,6 +845,34 @@ crypto, equities 25y, and now 1d futures). Intraday MR/breakout and 4h futures a
 fail. Promote TrendBrake1dFutures via walk-forward; drop scalp/daytrade as configured.
 Files: user_data/strategies/TrendBrake1dFutures.py (new, freeze-safe, with overlay).
 
+### FINAL BOT DISPOSITION (2026-07-24 — improve-in-place vs scrap+rebuild)
+
+Decision (Claude think-task + Hermes synthesis): **SCRAP the losers, do NOT improve
+in place.** Reasoning: after fee-isolation, scalp (-66%), daytrade (-90%), futures LS2
+(-35%) all have NEGATIVE expectancy => the entry signal carries no predictive content;
+tuning parameters just mines in-sample noise. In-place tuning is only justified when
+fee-free expectancy is POSITIVE (costs eat a real edge) — true for none of these.
+
+Per-bot:
+- **scalp (ScalpVwap5m): SCRAP.** 5m MR negative even fee-free => signal sign is wrong.
+  Intraday MR in crypto is a market-making business (maker rebates + latency) Freqtrade
+  5m cannot reach. No param fixes a wrong-signed signal.
+- **daytrade (DayTradeORB): SCRAP.** ORB's premise (overnight gap + open auction) does
+  not exist in 24/7 crypto; the "opening range" is an arbitrary clock slice. Don't retry
+  at 4h/1d — re-timeframing an absent premise just relocates noise.
+- **futures (TrendFollowLS2): SCRAP the strategy, KEEP the slot.** The fix already exists
+  and passed walk-forward: TrendBrake1dFutures (1d brake, +21%/PF1.55, WF 62%). Retire LS2
+  and promote the validated 1d brake into that slot post-freeze. Zero new research.
+
+**REDUNDANCY TRAP (key):** rebuilding scalp/daytrade as "daily brake variants" would
+create 3-4x BTC-beta (corr ~0.9, shared failure mode) — not diversification. Cap at TWO
+diversified bots: **brakedhold (spot long) + 1d futures brake (adds short side)**. Leave
+scalp + daytrade slots DARK. Expectancy 0 beats -66%.
+
+Post-freeze action (~wk 6-8, late Aug/early Sep 2026): promote TrendBrake1dFutures as a
+NEW daily futures bot (do NOT edit LS2 mid-test). No live config/strategy change until
+then — only measurement. Winners (brakedhold + spot) keep running the frozen test.
+
 **Both prototypes verified by backtest this session. Neither is wired to a live bot or
 plist. No live config/strategy changed. Delegate(Claude) created the files; Hermes
 re-verified the backtests + the walkforward_futures.py script independently.**
