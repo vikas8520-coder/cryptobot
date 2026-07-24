@@ -1,0 +1,6 @@
+{
+    "_comment": "PROTOTYPE overlay for TrendBrake4h backtests. Freeze-safe: config_futures.json is never edited; this is layered on top via a second -c so the pure 200-SMA brake is tested, not config_futures' -0.08 stop + trailing stop.",
+    "stoploss": -0.99,
+    "trailing_stop": false,
+    "trailing_only_offset_is_reached": false
+}
