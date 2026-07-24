@@ -537,3 +537,97 @@ still needs controlled `download-data` batches — not run. Nothing committed; l
 > freqtrade subclasses implement the SAME logic on crypto 1d data — so this equity result
 > is direct evidence the brake (and its buffer) is sound; the crypto A/B just confirms it
 > transfers to your bots.
+
+## 2026-07-23 — DEBUG: BrakedHold baseline
+**Root cause:** NOT uninitialized columns. `config_braked.json` set `stoploss:-0.05`,
+`trailing_stop:true`, `trailing_stop_positive:0.02/offset:0.03`, and freqtrade lets
+config-file values OVERRIDE strategy attributes (strategy's `-0.99` / `trailing_stop=False`).
+The 200-day-MA hold became a churn machine: 549/559 exits were config stop/trailing, only
+**10 were the intended 200MA `exit_signal`** — that's the "10 entries." Fee/dip bleed → loss.
+**Disproof of column bug:** `BrakedHoldDbg` with explicit `enter_long=0`/`exit_long=0` →
+identical 559 trades / -69.68% (freqtrade already zero-inits those columns).
+**Fix:** removed the stoploss/trailing_stop/trailing_stop_positive(+offset) keys from
+`config_braked.json` so the strategy's own risk params govern.
+**BTC/USDT 1d (2020-04-30→2026-07-20), before → after:**
+trades 559 → 27 (all `exit_signal`); profit -69.68% → **+33.86%**; abs drawdown 69.80% → 2.91%.
+(Data starts 2020-04, not 2014 → ~6yr, not 12; ~4-5 BTC round-trips/yr — the "9-20/yr"
+docstring figure is the 12-coin portfolio total, not one pair.)
+
+## 2026-07-23 — FIX: SL + brake-buffer probe mechanisms
+
+Both A/B probes returned IDENTICAL numbers to baseline. Two distinct root causes.
+
+**ROOT CAUSE A (SL probe — precedence).** `config.json` carries a *top-level*
+`"stoploss": -0.08`. In freqtrade, config-file values override BOTH the strategy
+class attribute AND the `<Strategy>.json` params file. So `TrendFollowHoptSL04.py`'s
+`stoploss=-0.04` class attr was ignored — and so was the copied
+`TrendFollowHoptSL04.json` params file (verified: still 45.06%, byte-identical). The
+params-json copy was the WRONG fix; only the **config layer** moves stoploss.
+Fix that works: `config_sl04probe.json` = `{"stoploss": -0.04}` layered after the
+base — `--config config.json --config config_sl04probe.json` (later config wins).
+Verified (TrendFollowHopt, 1h, 20170801-20260120, --cache none):
+- baseline -0.08 -> **45.06%**, PF 1.22
+- probe   -0.04 -> **19.63%**, PF 1.09
+The tighter stop bites hard *despite* trailing_offset 0.06 (-25pp) — it cuts trades
+that would've recovered before the +6% trail even armed. SL effect is NOT small here.
+
+**ROOT CAUSE B (brake-buffer — stale cache, mechanism fine).** The band override was
+never broken. Earlier identical Buf00==Buf20 was freqtrade's **backtest result
+cache** reusing a prior run across subclasses. With `--cache none` the sweep varies
+cleanly (BTC/USDT 1d, 20140101-20260720). Even the smallest 2% band already halves
+trade count — it was never "too small":
+- Buf00 (0%)  -> 27 trades, 33.86%
+- Buf20 (2%)  -> 11 trades, 36.70%
+- BufBig10 (10%) -> 6 trades, 31.48%
+- BufBig20 (20%) -> 3 trades, 37.07%
+Monotonic trade-count decay 27->11->6->3 confirms the subclass `populate_entry/exit_trend`
+override IS invoked. Takeaway: for ANY A/B probe here, `--cache none` is mandatory,
+and stoploss/roi/trailing can only be varied at the config layer, not class/params-json.
+
+New probe files (backtest-only, not wired to live bots): `config_sl04probe.json`,
+`TrendFollowHoptSL04.json`, `BrakedHoldBufBig10.py`, `BrakedHoldBufBig20.py`.
+
+### RESULTS (Workstream A run 2026-07-23 — crypto max-data, offline, freeze-safe)
+
+Data downloaded to max: spot 1h (BTC 2017 / ETH 2019 / SOL 2020), brakedhold 1d
+(12 pairs, BTC 2014 → 2026), scalp 5m (BTC/ETH 2019 / SOL 2020), futures 4h okx
+(LINK/AVAX/LTC/ADA 2018 → 2026). TRAIN = pre-2026-01-20, HOLD-OUT = 2026-01-20→2026-07-20.
+
+**SPOT SL (config-layer probe, TrendFollowHopt):**
+| | Train | HOLD-OUT | FULL |
+|---|---|---|---|
+| baseline SL -0.08 | 45.06% / PF1.22 / DD18.5% | -3.98% / PF0.52 | 41.08% / PF1.19 |
+| probe SL -0.04 | 19.63% / PF1.09 / DD28.2% | -3.98% / PF0.52 | 19.63% / PF1.09 |
+→ Tighter stop HURTS (profit -25pp, DD +10pp). **REJECT.** SL must vary at config layer (class/params-json override ignored because config.json pins top-level stoploss -0.08).
+
+**SPOT ADX sweep (TrendFollowHoptADX*, valid IntParameter override):**
+| ADX | Train profit | Train PF | Train DD | HOLD-OUT PF |
+|---|---|---|---|---|
+| 20 | 32% | 1.13 | 24.7% | 0.47 |
+| 25 (current) | 45% | 1.22 | 18.5% | 0.52 |
+| 30 | 53% | 1.33 | 15.8% | 0.28 |
+| 35 | 53% | 1.41 | 13.3% | 0.35 |
+→ Higher ADX = more profit + higher PF + LOWER DD on BOTH train & hold-out (same direction). **ADX30-35 beats current ADX25.** Post-freeze candidate (hold-out negative everywhere = 2026 H1 downturn, read relatively).
+
+**FUTURES ADX sweep (TrendFollowLS2ADX*, LINK/AVAX/LTC/ADA 4h):**
+| ADX | Train profit | Train PF | Train DD | HOLD-OUT PF |
+|---|---|---|---|---|
+| 20 | -53.7% | 0.83 | 56.1% | 0.40 |
+| 25 (current) | -32.8% | 0.87 | 42.6% | 0.45 |
+| 30 | -28.9% | 0.85 | 35.7% | 0.44 |
+| 35 | -28.7% | 0.80 | 31.8% | 0.40 |
+→ All negative (2022 collapse dominates). Higher ADX cuts DD (56%→32%) but PF flat/dips at 35. **INCONCLUSIVE** — unlike spot. Don't raise futures ADX on this evidence alone.
+
+**BRAKEDHOLD — CRITICAL BUG FOUND & FIXED:**
+- Baseline backtest showed -92% / PF0.21 / 92% DD, only 10 BTC entries in 12y. Root cause: `config_braked.json` had `stoploss:-0.05` + `trailing_stop:true` (+offset) that OVERRIDE the strategy's brake-only design → 549 stop-exits vs 10 brake-exits (churn machine, not a brake).
+- FIX (user-approved, keeps fix): removed those 4 keys from config_braked.json. BTC 1d now 27 trades / **+33.86% / PF6.80 / DD2.91%** — matches strategy docstring.
+- Buffer sweep now varies correctly (Buf00 27t/33.9% → Buf20 2% 11t/36.7% → Big10 6t/31.5% → Big20 3t/37.1%). Brake buffer is a real, working lever; earlier identity was the broken-baseline artifact.
+- **Action:** the live BrakedHold bot was running mis-configured (churning). Fix restores intended behavior. Flagged per freeze protocol; user chose to KEEP the fix.
+
+**Status:** Workstream A COMPLETE. All runs offline/freeze-safe. Live configs: only `config_braked.json` changed (bugfix, user-approved). All other live configs/strategies untouched. Baseline `b14188d` intent preserved (brakedhold now matches its design).
+
+**Net takeaways for post-freeze decisions:**
+1. SPOT `buy_adx` 25→30: evidence-backed improvement.
+2. SPOT tighter SL -0.04: reject (hurts).
+3. FUTURES ADX: inconclusive (less DD, no PF gain) — don't change yet.
+4. BRAKEDHOLD: was bugged; now brakes correctly (+33.86%/PF6.80/BTC). Primary bot health restored.

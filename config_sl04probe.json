@@ -1,0 +1,5 @@
+{
+    "$schema": "https://schema.freqtrade.io/schema.json",
+    "stoploss": -0.04,
+    "_comment": "Backtest-only SL A/B override (audit 2026-07-23). Layer AFTER config.json (--config config.json --config config_sl04probe.json) so this stoploss -0.04 wins. ROOT CAUSE the class-attr/params-json probes failed: config.json pins a top-level stoploss -0.08, and freqtrade config values beat BOTH the strategy class attribute AND the <Strategy>.json params file. The only lever that actually moves stoploss is the config layer. Not wired to any live bot."
+}
