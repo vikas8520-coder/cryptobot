@@ -779,3 +779,29 @@ net-negative; the 2022 crash just makes a bad strategy catastrophic. The earlier
 scalp: drop, or redesign (the brake concept works on equities — a 4h/1d trend-brake
 rather than this particular futures trend-follow may transfer better). Do NOT promote
 any futures tweak without a walk-forward showing ≥60% positive out-of-sample windows.
+
+### REDESIGN PROTOTYPES (2026-07-23 — scalp + futures, freeze-safe, NOT deployed)
+
+Both are new prototype files + layered overlay configs (defeat the live pinned stops
+via a second `-c`, so live configs are never edited). Backtested on max data.
+
+**ScalpVwap1hRedesign (1h, exit at +1σ, ATR stop):**
+- Changes: 5m→1h (wider edge), exit at vwap+1σ (not vwap), stop=1.5×ATR.
+- Result: **-12.08% / PF0.73 / DD13.75%** (vs original -65.94%/PF0.54/DD66%).
+- Better (DD 5× smaller, loss 5.5× smaller) but **STILL net-negative (PF0.73 < 1.1)**.
+- Confirms the prototype's own hypothesis: VWAP mean-reversion is dead on crypto at
+  every timeframe. **VERDICT: DROP scalp, do not re-tune.** (Fee-isolation not needed —
+  PF0.73 even after the fix means logic negative.)
+- Files: user_data/strategies/ScalpVwap1hRedesign.py + user_data/prototype_overlay_scalp.json
+
+**TrendBrake4h (4h, SMA200 brake + ADX>25, no stop/short — the working concept):**
+- Changes: pure 200-SMA brake (exit when close<SMA200), ADX>25 gate, long-only, no stop.
+- Result: **+99.64% / PF1.85 / DD13.52%** (vs broken original -35.58%/PF0.86/DD45%).
+- Positive, PF>1, DD halved+. The brake concept transfers to futures at 4h.
+- **VERDICT: CANDIDATE** — but must pass a walk-forward (≥60% positive OOS windows)
+  before any live promotion. Reuse walkforward harness adapted to TrendBrake4h.
+- Files: user_data/strategies/TrendBrake4h.py + user_data/prototype_overlay_futures.json
+
+**Both prototypes verified by backtest this session. Neither is wired to a live bot or
+plist. No live config/strategy changed. Delegate(Claude) created the files; Hermes
+re-verified the backtests + the walkforward_futures.py script independently.**
