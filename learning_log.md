@@ -40,6 +40,18 @@
 > *before* touching any live config. Freeze-safe: nothing here changes the frozen
 > paper-test window (baseline `b14188d`). **Hold running until the split is agreed.**
 
+> ⚠️ **REPRODUCIBILITY NOTE (2026-07-23):** The command blocks in the sections below
+> (SL, ADX sweep, brakedhold buffer) are the ORIGINAL pre-registration drafts — they use
+> 1-year timeranges (`20250720-…`) and, for SL, the bare `--strategy TrendFollowHoptSL04`
+> invocation. **These do NOT reproduce the actual results** (they predate the max-data
+> download and the config_braked.json bugfix, and the SL subclass alone is overridden by
+> config.json's top-level stoploss). For commands that actually work, use the CORRECTED
+> mechanisms documented in the **Scope C RESULTS** section: SL via layered
+> `--config config.json --config config_sl04probe.json`; ADX/futures on MAX-DATA ranges
+> (`20170801-…` etc.); brakedhold buffer AFTER the config bugfix with `--cache none`.
+> The conclusions/results tables in this file are the verified ones; only the early
+> command blocks are stale.
+
 ### Scenario
 - **Bot:** spot (`config.json`, `dry_run: true`)
 - **Strategy:** `TrendFollowHopt` (baseline) vs `TrendFollowHoptSL04` (subclass, `stoploss = -0.04`)
@@ -651,3 +663,16 @@ in trending/recovery regimes, not choppy ones — a REGIME finding, not a blanke
 train-only "win" was overfit, confirmed by walk-forward.** (~96 backtests, offline, freeze-safe.)
 
 **Net: the ADX hypothesis is CLOSED — rejected by walk-forward. BrakedHold bugfix stands as the one solid outcome of Workstream A.**
+
+### GAP CLOSING (2026-07-23 — scalp vol-filter + brakedhold buffer)
+
+**Scalp vol-filter: NOT WORTH IT — REJECTED.**
+- Scalp baseline (`ScalpVwap5m`, 5m, max data 2019→2026): **-65.94% / PF0.54 / DD66% / 2465 trades** (train -61.6%, hold-out -4.4%/PF0.37). The strategy is structurally unprofitable on max history — fees (5m turnover) and/or weak VWAP-band logic, not a vol-timing problem.
+- Since the core has negative expectancy, a vol filter can't rescue it (it would only trim sample size on an already-losing strategy). The "measure-first" plan's premise (does a filter help a borderline strategy?) is moot — this strategy is below borderline.
+- **Action:** scalp vol-filter draft is NOT needed. Recommend separate investigation of WHY scalp loses (fees? band width? regime), or drop scalp from the test. Flagged: scalp is a PRIMARY test bot currently bleeding.
+
+**Brakedhold brake buffer: REAL LEVER, NOT URGENT — no deploy decision now.**
+- Mechanism verified post-bugfix (Scope C): Buf00 27t/33.9% → Buf20(2%) 11t/36.7% → BufBig10(10%) 6t/31.5% → BufBig20(20%) 3t/37.1%. Band reduces trade count, return stays ~flat/slightly up.
+- The brake is already healthy (BTC +33.86%/PF6.80 post-fix). A buffer is a minor refinement (churn reduction), not a fix. **No deploy needed during freeze.** Revisit post-freeze if churn/tax matters.
+
+**All gaps closed:** (A) equity runner moved to `user_data/backtest_equity/` (version-controlled, runs); (B) reproducibility note added to stale command blocks; (C) scalp + brakedhold-buffer verdicts recorded. Backtest lab is now complete + reproducible.
