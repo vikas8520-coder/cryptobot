@@ -808,6 +808,37 @@ via a second `-c`, so live configs are never edited). Backtested on max data.
   + user_data/walkforward_trendbrake.py (harness; fixes a no-data-window bug in the
   original futures WF by excluding pre-2020 windows with no futures OHLCV).
 
+### DAYTRADE + SCALP/FUTURES PROFITABILITY ANALYSIS (2026-07-24)
+
+**Live status (paper, frozen test, tiny samples):**
+- scalp: 5 closed trades, -1.59 abs (running since 2026-07-22).
+- futures (LS2): 48 closed, -13.59 abs since 2026-07-16 (bleeding).
+- daytrade (DayTradeORB): only 8 trades over 2026-07-21→22, then **BOT NOT RUNNING
+  (crashed/stopped)** — last trade 2026-07-22 23:00. Needs restart for live data.
+- Winners remain: brakedhold (+1219%) + spot (+41%).
+
+**DayTradeORB BACKTEST (1h ORB breakout, BTC/ETH/SOL/XRP, 2019-2026):**
+- **-89.99% / PF0.68 / DD90% / 2695 trades** — BROKEN. Even the "asymmetric-payoff
+  breakout" design loses on crypto 1h (trailing-only exit + session-flush bleeds it).
+  So daytrade is a 3rd loser, not a keeper.
+
+**HOW TO MAKE THEM PROFITABLE (evidence-backed):**
+- **SCALP:** cannot be made profitable as mean-reversion — no crypto edge after fees
+  (ScalpVwap5m -66% even fee-free; 1h redesign -12%/PF0.73). DROP, or fold into the
+  daily brake (the only working concept). No intraday MR path exists.
+- **FUTURES:** LS2 broken; 4h brake WF-rejected (47%). But the brake WORKS AT DAILY:
+  new prototype **TrendBrake1dFutures** (1d SMA200 brake + ADX>25, long-only, no
+  stop) backtests **+21.13% / PF1.55 / DD10.76%** (2018-2026). This is the path —
+  the brake's edge lives at daily granularity, not 4h. CANDIDATE; needs walk-forward
+  (>=60% OOS positive) before any live promotion.
+- **DAYTRADE:** backtest -90% -> drop OR redesign as a 1d/4h brake. Restart the bot
+  only if you want live confirmation; backtest says no edge.
+
+**Net:** the ONLY reproducible edge in this repo is the DAILY brake (brakedhold on
+crypto, equities 25y, and now 1d futures). Intraday MR/breakout and 4h futures all
+fail. Promote TrendBrake1dFutures via walk-forward; drop scalp/daytrade as configured.
+Files: user_data/strategies/TrendBrake1dFutures.py (new, freeze-safe, with overlay).
+
 **Both prototypes verified by backtest this session. Neither is wired to a live bot or
 plist. No live config/strategy changed. Delegate(Claude) created the files; Hermes
 re-verified the backtests + the walkforward_futures.py script independently.**
