@@ -707,3 +707,26 @@ Options: (a) drop scalp from the test, (b) redesign (wider band / different edge
 (c) accept it as the honest "best-available scalp still loses" data point. No live config
 change needed (config_scalp.json was already restored to stoploss -0.02, no trailing —
 same bug class as brakedhold, fixed earlier). Diagnostic is reproducible via scalp_diag.py.
+
+### CONSOLIDATED BACKTEST — all live bots (2026-07-23, max-data, freeze-safe lab)
+
+One comparable table, each bot run on its max downloaded history via the lab's
+freeze-safe method (subclass probes / config-layer where needed; no live config change).
+Metrics: TotProfit% / PF / MaxDD / trades on the FULL range.
+
+| Bot | Strategy | Tf | Range | TotProfit% | PF | MaxDD | Trades | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| spot | TrendFollowHopt | 1h | 2017-2026 | +41.08% | 1.19 | 18.5% | 1301 | marginal-positive (ADX tweak rejected by WF) |
+| brakedhold | BrakedHold | 1d | 2014-2026 | **+1219.7%** | **11.06** | **3.48%** | 296 | STRONG (post-bugfix; the brake works) |
+| scalp | ScalpVwap5m | 5m | 2019-2026 | -65.94% | 0.54 | 66.0% | 2465 | NEGATIVE (logic net-negative; see diagnosis) |
+| futures | TrendFollowLS2 | 4h | 2018-2026 | -35.58% | 0.86 | 45.0% | 872 | NEGATIVE (2022 collapse dominates; ADX inconclusive) |
+
+Notes:
+- brakedhold +1219%/PF11.06 is the headline: the config bugfix (stoploss/trailing removed)
+  restored the intended brake; across 12 coins 1d it compounds hugely with tiny DD.
+- spot is mildly positive but the ADX>25 "improvement" was rejected by walk-forward.
+- scalp loses even at zero fee (logic negative) — not a fee patch.
+- futures -35.58%/PF0.86: negative, dominated by 2022 collapse; ADX sweep was inconclusive (less DD, no PF gain) — leave alone.
+
+**This is the lab's capstone: every live bot now has a reproducible max-data backtest
+in one table.** Re-runnable via the commands in Scope C RESULTS + scalp_diag.py.
