@@ -730,3 +730,52 @@ Notes:
 
 **This is the lab's capstone: every live bot now has a reproducible max-data backtest
 in one table.** Re-runnable via the commands in Scope C RESULTS + scalp_diag.py.
+
+### SCALP REDESIGN PROPOSAL (2026-07-23 — why it fails + what to do)
+
+**Root cause (from ScalpVwap5m.py logic):** reward:risk is structurally terrible.
+- Entry: `close < vwap - 2σ` ≈ a 0.3–0.6% dip below session VWAP.
+- Exit: `close >= vwap` (snap back to fair value) ≈ +0.3–0.6% gain.
+- Stop: `-0.02` (2%). ROI time-decay backstop.
+- So per trade: gain ~0.4%, risk 2.0% → **reward:risk ≈ 0.2**. Even 70% win rate
+  gives PF < 1. The edge is too small to survive the stop, let alone 0.2% fees.
+- Secondary: 5m crypto mean-reversion fights momentum microstructure (fades often
+  catch falling knives); `volume > vol_ma` enters on breakout candles (continuation),
+  not reversals; ADX<25 guard lags the regime.
+
+**Options (pick one):**
+- **(A) DROP scalp.** The strategy's own docstring admits "1m scalping has NO evidence
+  of a durable edge after fees; VWAP-band 5m is the least-bad." Even the best scalp is
+  marginal-negative. Kill the bot; redirect capital to the brake (which works).
+- **(B) Redesign on a larger edge.** Move from 5m VWAP-band to **1h/4h volatility
+  mean-reversion** with proper reward:risk: enter when `close < vwap - 2σ` on 1h,
+  **exit at +1σ above vwap** (not at vwap — bigger target), **stop = 1.5× ATR** (risk
+  scales with vol, not fixed 2%). Per-trade edge becomes multiple %, not 0.4% → fees
+  matter far less. Test via a subclass probe + backtest BEFORE any live change.
+- **(C) Accept as data point.** Keep running as the honest "best-available scalp still
+  loses" evidence; don't trade it seriously.
+
+**Recommendation: (A) or (B).** (C) wastes a primary-bot slot on a known loser.
+If (B), prototype `ScalpVwap1hRedesign` (subclass, freeze-safe) and backtest on 1h
+max data; only promote if PF > 1.1 out-of-sample.
+
+### FUTURES WALK-FORWARD (2026-07-23 — broken or just 2022? — BROKEN)
+
+Reusing the walk-forward harness for TrendFollowLS2 (4h, 2018→2026, LINK/AVAX/LTC/ADA):
+rolling 1y train / 3mo test, split by "touches 2022 crash" vs not. Driver:
+`user_data/walkforward_futures.py`.
+
+| Split | Positive windows | % |
+|---|---|---|
+| Non-2022 windows | 8/23 | **35%** |
+| 2022-touching windows | 0/5 | 0% |
+
+**VERDICT: BROKEN — not just 2022.** Even excluding the crash, only 35% of
+out-of-sample windows are profitable (PF<1 consistently). Like scalp, the logic is
+net-negative; the 2022 crash just makes a bad strategy catastrophic. The earlier
+"inconclusive ADX" sweep + full-period -35.58% are consistent with this.
+
+**Implication:** futures (TrendFollowLS2) should NOT be traded as-is. Options mirror
+scalp: drop, or redesign (the brake concept works on equities — a 4h/1d trend-brake
+rather than this particular futures trend-follow may transfer better). Do NOT promote
+any futures tweak without a walk-forward showing ≥60% positive out-of-sample windows.
