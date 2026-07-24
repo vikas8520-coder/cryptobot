@@ -99,11 +99,11 @@ def read_equity():
 
 
 BOTS = [
-    ("Spot", 8080, api_pw(8080), "Trend-follow · spot"),
-    ("Futures", 8081, api_pw(8081), "Long / short · futures"),
-    ("Braked Hold", 8082, api_pw(8082), "200-day brake · spot"),
-    ("Scalp", 8083, api_pw(8083), "VWAP reversion · 5m LAB"),
-    ("Day Trade", 8084, api_pw(8084), "Opening-range breakout · 1h LAB"),
+    ("Spot", 8080, api_pw(8080), "Trend-follow · spot · STAR live (backtest +41% PF1.19)"),
+    ("Futures", 8081, api_pw(8081), "Long/short · futures · BROKEN (WF 35% -> drop; 1d brake candidate)"),
+    ("Braked Hold", 8082, api_pw(8082), "200-day brake · spot · WINNER (backtest +1219% PF11)"),
+    ("Scalp", 8083, api_pw(8083), "VWAP reversion · 5m · BROKEN (drop; -66% even fee-free)"),
+    ("Day Trade", 8084, api_pw(8084), "ORB breakout · 1h · BROKEN (restarted; -90% backtest)"),
     # ApeX removed 2026-07-23: synthetic-only paper engine whose balance inflated the
     # real-money headline to +2641%/$301k (synthetic price-path bug, not real capital).
     # Kept out of BOTS so the dashboard stops polling :8085 and the combined total is honest.
