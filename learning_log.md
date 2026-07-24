@@ -797,10 +797,16 @@ via a second `-c`, so live configs are never edited). Backtested on max data.
 **TrendBrake4h (4h, SMA200 brake + ADX>25, no stop/short — the working concept):**
 - Changes: pure 200-SMA brake (exit when close<SMA200), ADX>25 gate, long-only, no stop.
 - Result: **+99.64% / PF1.85 / DD13.52%** (vs broken original -35.58%/PF0.86/DD45%).
-- Positive, PF>1, DD halved+. The brake concept transfers to futures at 4h.
-- **VERDICT: CANDIDATE** — but must pass a walk-forward (≥60% positive OOS windows)
-  before any live promotion. Reuse walkforward harness adapted to TrendBrake4h.
+- Positive, PF>1, DD halved+. The brake concept transfers to futures at 4h *on paper*.
+- **WALK-FORWARD VERDICT: REJECTED** (user_data/walkforward_trendbrake.py, 2026-07-23):
+  only **9/19 (47%) non-2022 out-of-sample windows positive** (< 60% bar); 1/5 crash
+  windows. Full fee=0: +111.74%/PF2.06 (not fee-driven). The +99.64% full-period
+  number was a FIT, not an edge — same trap as the original scalp/futures. The brake
+  works on daily/clean-trend series (BTC 1d +1219%, equities 25y) but NOT on crypto
+  futures 4h. **Do NOT promote TrendBrake4h.**
 - Files: user_data/strategies/TrendBrake4h.py + user_data/prototype_overlay_futures.json
+  + user_data/walkforward_trendbrake.py (harness; fixes a no-data-window bug in the
+  original futures WF by excluding pre-2020 windows with no futures OHLCV).
 
 **Both prototypes verified by backtest this session. Neither is wired to a live bot or
 plist. No live config/strategy changed. Delegate(Claude) created the files; Hermes
