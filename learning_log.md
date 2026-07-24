@@ -829,10 +829,16 @@ via a second `-c`, so live configs are never edited). Backtested on max data.
 - **FUTURES:** LS2 broken; 4h brake WF-rejected (47%). But the brake WORKS AT DAILY:
   new prototype **TrendBrake1dFutures** (1d SMA200 brake + ADX>25, long-only, no
   stop) backtests **+21.13% / PF1.55 / DD10.76%** (2018-2026). This is the path —
-  the brake's edge lives at daily granularity, not 4h. CANDIDATE; needs walk-forward
-  (>=60% OOS positive) before any live promotion.
-- **DAYTRADE:** backtest -90% -> drop OR redesign as a 1d/4h brake. Restart the bot
-  only if you want live confirmation; backtest says no edge.
+  the brake's edge lives at daily granularity, not 4h.
+  **WALK-FORWARD VERDICT: PASSES** (user_data/walkforward_trendbrake1d.py, 2026-07-24):
+  12 windows (2y train/6mo test), non-2022 = **5/8 (62%) positive** (>=60% bar).
+  2022-touching 0/3 (crash unavoidable). First futures candidate to clear the gate.
+  **VIABLE for live promotion** — but only post-freeze, and as a NEW daily bot (not
+  by editing the existing 4h futures bot mid-test). Freeze-safe until week 6-8.
+- **DAYTRADE:** backtest -90% -> drop OR redesign as a 1d/4h brake. **Bot was found
+  NOT RUNNING (crashed after 1 day); restarted 2026-07-24 12:16 UTC** (no config
+  change) to gather live confirmation. Backtest still says no 1h ORB edge, so the
+  live data is for confirmation only — do not treat a lucky run as a working strategy.
 
 **Net:** the ONLY reproducible edge in this repo is the DAILY brake (brakedhold on
 crypto, equities 25y, and now 1d futures). Intraday MR/breakout and 4h futures all
