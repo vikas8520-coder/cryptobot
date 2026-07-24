@@ -607,7 +607,7 @@ Data downloaded to max: spot 1h (BTC 2017 / ETH 2019 / SOL 2020), brakedhold 1d
 | 25 (current) | 45% | 1.22 | 18.5% | 0.52 |
 | 30 | 53% | 1.33 | 15.8% | 0.28 |
 | 35 | 53% | 1.41 | 13.3% | 0.35 |
-→ Higher ADX = more profit + higher PF + LOWER DD on BOTH train & hold-out (same direction). **ADX30-35 beats current ADX25.** Post-freeze candidate (hold-out negative everywhere = 2026 H1 downturn, read relatively).
+→ Train shows higher ADX = more profit + higher PF + LOWER DD. BUT hold-out PF moves the OPPOSITE way (ADX25=0.52 → ADX30=0.28 → ADX35=0.35), so under our own pre-registered rule ('hold-out divergence → reject as overfit', line 502) this is **OVERFIT to train, NOT proven**. Treat ADX30-35 as a hypothesis, not a result. Needs walk-forward / post-tune hold-out before any deploy. (Hold-out negative everywhere = 2026 H1 downturn, but the *direction* reverses, which is the red flag.)
 
 **FUTURES ADX sweep (TrendFollowLS2ADX*, LINK/AVAX/LTC/ADA 4h):**
 | ADX | Train profit | Train PF | Train DD | HOLD-OUT PF |
@@ -627,7 +627,8 @@ Data downloaded to max: spot 1h (BTC 2017 / ETH 2019 / SOL 2020), brakedhold 1d
 **Status:** Workstream A COMPLETE. All runs offline/freeze-safe. Live configs: only `config_braked.json` changed (bugfix, user-approved). All other live configs/strategies untouched. Baseline `b14188d` intent preserved (brakedhold now matches its design).
 
 **Net takeaways for post-freeze decisions:**
-1. SPOT `buy_adx` 25→30: evidence-backed improvement.
+1. SPOT `buy_adx` 25→30: HYPOTHESIS ONLY — train looks better but hold-out PF reverses (overfit risk per our own rule). Do NOT deploy without walk-forward.
 2. SPOT tighter SL -0.04: reject (hurts).
 3. FUTURES ADX: inconclusive (less DD, no PF gain) — don't change yet.
 4. BRAKEDHOLD: was bugged; now brakes correctly (+33.86%/PF6.80/BTC). Primary bot health restored.
+5. **REVIEW CAVEAT (2026-07-23):** Claude adversarial review flagged (a) ADX "win" fails our own hold-out rule → reclassified as hypothesis (above); (b) command blocks in earlier sections are stale (pre-fix mechanisms, 1y timeranges) and won't reproduce these numbers — do NOT copy-paste them; (c) sample sizes thin (brakedhold 27 trades/6y). The BrakedHold config bugfix itself was reviewed as CORRECT. Live bot restarted 7:26PM (PID 71982) to load the fixed config — verified no stoploss/trailing in config_braked.json.
