@@ -873,6 +873,13 @@ Post-freeze action (~wk 6-8, late Aug/early Sep 2026): promote TrendBrake1dFutur
 NEW daily futures bot (do NOT edit LS2 mid-test). No live config/strategy change until
 then — only measurement. Winners (brakedhold + spot) keep running the frozen test.
 
+UPDATE (2026-07-24): the 3 losers were physically STOPPED + launchd plists UNLOADED
+(`launchctl unload -w` on com.vikas.bot.scalp/daytrade/futures) so they won't
+auto-restart on reboot. Slots now DARK on the dashboard (show as "missing"). Winners
+(brakedhold PID 71982, spot PID 62762) confirmed alive (HTTP 200). Fresh 1d futures bot
+deferred to post-freeze per the Sep-7 cron reminder — starting it early would break
+the freeze.
+
 **Both prototypes verified by backtest this session. Neither is wired to a live bot or
 plist. No live config/strategy changed. Delegate(Claude) created the files; Hermes
 re-verified the backtests + the walkforward_futures.py script independently.**
