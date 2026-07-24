@@ -631,4 +631,23 @@ Data downloaded to max: spot 1h (BTC 2017 / ETH 2019 / SOL 2020), brakedhold 1d
 2. SPOT tighter SL -0.04: reject (hurts).
 3. FUTURES ADX: inconclusive (less DD, no PF gain) — don't change yet.
 4. BRAKEDHOLD: was bugged; now brakes correctly (+33.86%/PF6.80/BTC). Primary bot health restored.
-5. **REVIEW CAVEAT (2026-07-23):** Claude adversarial review flagged (a) ADX "win" fails our own hold-out rule → reclassified as hypothesis (above); (b) command blocks in earlier sections are stale (pre-fix mechanisms, 1y timeranges) and won't reproduce these numbers — do NOT copy-paste them; (c) sample sizes thin (brakedhold 27 trades/6y). The BrakedHold config bugfix itself was reviewed as CORRECT. Live bot restarted 7:26PM (PID 71982) to load the fixed config — verified no stoploss/trailing in config_braked.json.
+5. **REVIEW CAVEAT (2026-07-23):** Claude adversarial review flagged (a) ADX "win" fails our own hold-out rule → reclassified as hypothesis (above); (b) command blocks in earlier sections are stale (pre-fix mechanisms, 1y timeranges) and won't reproduce these numbers — do NOT copy-paste them; (c) sample sizes thin (brakedhold 27 trades/6y). The BrakedHold config bugfix itself was reviewed as CORRECT. Live bot restarted 7:26PM (PID 71982) to load fixed config — verified no stoploss/trailing in config_braked.json.
+
+### WALK-FORWARD (2026-07-23 — resolves the ADX question)
+Built `user_data/walkforward_adx.py`: 24 rolling windows, 1y train / 3mo test / 3mo step,
+2019→2025, spot 1h, ADX∈{20,25,30,35}. Each window: pick best ADX on train, test it vs
+fixed ADX25 on the out-of-sample slice. Rule: ≥60% of windows beat ADX25 → real; else overfit.
+
+| Result | Value |
+|---|---|
+| Windows | 24 |
+| Train-chosen ADX beat ADX25 on TEST | **14/24 (58%)** |
+| **Verdict** | **OVERFIT** — does not consistently beat ADX25 out-of-sample |
+
+Per-window detail (log /tmp/wf_adx.log): from 2022 (recovery) the train-chosen ADX
+(usually 35) beats ADX25 in nearly every window; 2019-2021 mixed. So higher ADX helps
+in trending/recovery regimes, not choppy ones — a REGIME finding, not a blanket rule.
+**Conclusion: do NOT raise spot buy_adx above 25 based on this evidence. The original
+train-only "win" was overfit, confirmed by walk-forward.** (~96 backtests, offline, freeze-safe.)
+
+**Net: the ADX hypothesis is CLOSED — rejected by walk-forward. BrakedHold bugfix stands as the one solid outcome of Workstream A.**
