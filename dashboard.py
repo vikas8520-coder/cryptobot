@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-24c"
+DASH_VERSION = "2026-07-24d"
 import csv
 from local_secrets import api_pw
 import json
@@ -506,16 +506,16 @@ PAGE = r"""<!doctype html>
     font-variant-numeric:tabular-nums;}
   .botdet .label{display:block;margin-bottom:7px;}
 
-  /* ===== square-tile bot layout (replaces table rows) ===== */
-  .tilegrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+  /* ===== square/rectangular-tile bot layout (replaces table rows) ===== */
+  .tilegrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
     align-items:start;          /* each tile sizes to its own content; expanded tile
                                    does NOT stretch its row-mates (row-expand bug fix) */
     overflow:visible;           /* expanded detail must never be clipped */
     padding:12px 14px;}
-  @media(max-width:520px){.tilegrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}}
+  @media(max-width:560px){.tilegrid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));}}
   .tile{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;
-    padding:13px 14px 12px;cursor:pointer;transition:border-color .12s ease,transform .12s ease,box-shadow .12s ease;
-    display:flex;flex-direction:column;gap:9px;min-height:150px;align-self:start;overflow:visible;outline:none;}
+    padding:11px 14px 10px;cursor:pointer;transition:border-color .12s ease,transform .12s ease,box-shadow .12s ease;
+    display:flex;flex-direction:column;gap:8px;min-height:118px;align-self:start;overflow:visible;outline:none;}
   .tile[aria-expanded="true"]{z-index:2;}   /* expanded detail paints above row-mates */
   .tile:hover{border-color:var(--muted);transform:translateY(-1px);}
   .tile:focus-visible{outline:2px solid var(--amber);outline-offset:-2px;}
