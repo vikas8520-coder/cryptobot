@@ -153,6 +153,9 @@ class EngineState:
             "amount": amount, "stake_amount": stake,
             "open_rate": price, "open_date": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f"),
             "open_timestamp": int(time.time() * 1000), "open_cycle": self.cycles,
+            # audit 2026-07-25: stamp the candle-bar index at entry so the time-stop
+            # ages in BARS, not ~5s engine ticks (the old open_cycle bug).
+            "open_bar": self.strategy.bar_index() if hasattr(self.strategy, "bar_index") else 0,
             "current_rate": price, "profit_ratio": 0.0, "profit_pct": 0.0,
             "profit_abs": 0.0, "fee_open_cost": stake * fee,
             "fee_close_cost": None, "funding_fees": 0.0, "orders": [],
@@ -220,7 +223,8 @@ class EngineState:
     def cycle_strategy(self):
         """One strategy tick: build the plain-dict state, act on the signal."""
         with self._lock:
-            open_state = [{"trade_id": t["trade_id"], "open_cycle": t.get("open_cycle", self.cycles)}
+            open_state = [{"trade_id": t["trade_id"], "open_cycle": t.get("open_cycle", self.cycles),
+                           "open_bar": t.get("open_bar")}
                           for t in self.positions]
             sig = self.strategy.signal({
                 "cycle": self.cycles, "paused": self.paused,

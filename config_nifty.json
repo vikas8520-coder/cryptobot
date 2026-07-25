@@ -52,8 +52,5 @@
     "add_config_files": [
         "config_nifty.secret.json"
     ],
-    "stoploss": -0.05,
-    "trailing_stop": true,
-    "trailing_stop_positive": 0.02,
-    "trailing_stop_positive_offset": 0.03
+    "stoploss": -0.05
 }
