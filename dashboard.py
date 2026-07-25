@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-24d"
+DASH_VERSION = "2026-07-24f"
 import csv
 from local_secrets import api_pw
 import json
@@ -410,8 +410,9 @@ def index():
     # [cache-bust] no-store forces the browser to re-fetch every load, so a
     # stale tab never silently shows an old build after a dashboard deploy.
     # __DASH_VER__ is substituted from DASH_VERSION at request time.
+    # __DASH_BUILD__ is the same value, exposed to JS for the stale-tab hard-reload guard.
     return HTMLResponse(
-        PAGE.replace("__DASH_VER__", DASH_VERSION),
+        PAGE.replace("__DASH_VER__", DASH_VERSION).replace("__DASH_BUILD__", DASH_VERSION),
         headers={"Cache-Control": "no-store, max-age=0"},
     )
 
@@ -419,6 +420,7 @@ def index():
 PAGE = r"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store">
 <title>Trading Desk · build __DASH_VER__</title>
 <style>
   :root{
@@ -545,7 +547,10 @@ PAGE = r"""<!doctype html>
   .tile .tchev{color:var(--faint);font-size:13px;transition:transform .15s ease;}
   .tile[aria-expanded="true"] .tchev{transform:rotate(90deg);}
   .tile.detwrap{display:block;}
-  .botdet{margin-top:4px;border-top:1px solid var(--line);padding-top:12px;}
+  /* detail is an inset panel INSIDE the tile — never a full-width top border that
+     can be mistaken for the card edge. Subtle fill + rounded box makes containment obvious. */
+  .botdet{margin-top:10px;background:var(--surface-2);border:1px solid var(--line);
+    border-radius:9px;padding:11px 12px 12px;}
   .winbar{height:2px;border-radius:2px;background:var(--line);margin:3px 0 0 auto;max-width:46px;overflow:hidden;}
   .winbar>i{display:block;height:100%;background:var(--teal);border-radius:2px;}
   .pos-row{font-variant-numeric:tabular-nums;}
@@ -811,6 +816,16 @@ PAGE = r"""<!doctype html>
 const $=id=>document.getElementById(id);
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 document.documentElement.setAttribute("data-theme", localStorage.getItem("deskTheme")||"dark");
+
+// ---- stale-tab guard: hard-reload if the served build changed since this tab last loaded ----
+// no-store defeats normal caching but NOT bfcache on back/forward; this forces a fresh
+// fetch so an old (pre-fix) build can never silently render after a dashboard deploy.
+const DASH_BUILD="__DASH_BUILD__";
+try{
+  const prev=sessionStorage.getItem("dashBuild");
+  if(prev && prev!==DASH_BUILD){ location.reload(true); }
+  else { sessionStorage.setItem("dashBuild", DASH_BUILD); }
+}catch(e){ /* sessionStorage unavailable: skip guard */ }
 
 // ---- price chart (candles + volume + 200-day line + buy/sell markers) ----
 const CHART_ASSETS=[
