@@ -577,6 +577,9 @@ PAGE = r"""<!doctype html>
   .tile .thead{display:flex;align-items:center;gap:7px;}
   .tile .sdot{width:9px;height:9px;border-radius:50%;background:var(--faint);flex:none;}
   .tile.on .sdot{background:var(--teal);}
+  .tile .tcat{margin-left:auto;font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--faint);border:1px solid var(--line);border-radius:5px;
+    padding:1px 5px;white-space:nowrap;}
   .tile .tname{font-weight:700;font-size:14px;letter-spacing:-.01em;line-height:1.1;}
   .tile .tdesc{font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.3;
     max-height:26px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
@@ -1252,7 +1255,7 @@ function botDetail(b){
     </div>`;
 }
 
-function botRow(b){
+function botRow(b,cat){
   const sc=!b.online?"off":b.state==="running"?"run":"paused";
   const stxt=!b.online?"offline":b.state;
   const health=!b.online?"flat":b.profit_pct>0.001?"up":b.profit_pct<-0.001?"down":"flat";
@@ -1261,10 +1264,11 @@ function botRow(b){
   const ex=botOpen.has(b.name);
   const bal=b.has_balance?money(b.balance,b.currency||"USD"):"—";
   // SQUARE TILE: basic info always visible; advanced (open positions + watchlist +
-  // 30d equity) shows when expanded via the existing botOpen toggle.
-  return `<div class="tile ${health}${b.online?" on":""}${ex?" detwrap":""}" role="button" tabindex="0"
+  // 30d equity) shows when expanded via the existing botOpen toggle. Category tag
+  // replaces the old CRYPTO / SHORT-TERM / PAPER EQUITY section headers.
+  return `<div class="tile ${health}${b.online?" on":" "}${ex?" detwrap":""}" role="button" tabindex="0"
       aria-expanded="${ex}" data-bot="${b.name}" title="${b.name} — click for open positions &amp; watchlist">
-      <div class="thead"><i class="sdot"></i><span class="tname">${b.name}</span></div>
+      <div class="thead"><i class="sdot"></i><span class="tname">${b.name}</span><span class="tcat">${cat}</span></div>
       <div class="tdesc">${b.desc}</div>
       ${b.open.length?`<span class="opct">${b.open.length} open</span>`:""}
       <div class="tmetrics">
@@ -1281,25 +1285,17 @@ function botRow(b){
 
 function renderBots(bots){
   _lastBots=bots;
-  const byName=new Map(bots.map(b=>[b.name,b]));
-  const claimed=new Set();
-  const groups=BOT_GROUPS.map(([title,names])=>{
-    const members=names.map(n=>byName.get(n)).filter(Boolean);
-    members.forEach(b=>claimed.add(b.name));
-    return [title,members];
-  });
-  // any bot added to BOTS but not to a group still shows up — never silently drop one
-  const rest=bots.filter(b=>!claimed.has(b.name));
-  if(rest.length) groups.push(["Other",rest]);
+  // flatten all groups into one tile grid; tag each tile with its category instead
+  // of splitting into CRYPTO / SHORT-TERM / PAPER EQUITY section headers.
+  const catOf={};
+  BOT_GROUPS.forEach(([title,names])=>names.forEach(n=>catOf[n]=title));
+  bots.forEach(b=>{ if(!catOf[b.name]) catOf[b.name]="Other"; });
+  const bal=bots.reduce((s,b)=>s+(b.has_balance?b.balance:0),0);
+  const live=bots.filter(b=>b.online).length;
 
-  $("bots").innerHTML=groups.filter(([,m])=>m.length).map(([title,members])=>{
-    const bal=members.reduce((s,b)=>s+(b.has_balance?b.balance:0),0);
-    const live=members.filter(b=>b.online).length;
-    const sum=`${live}/${members.length} live · ${money(bal)}`;
-    return `<div class="botgrp">
-      <div class="botgrphd"><span class="label">${title}</span><span class="gsum">${sum}</span></div>
-      <div class="tilegrid">${members.map(botRow).join("")}</div></div>`;
-  }).join("");
+  $("bots").innerHTML=`<div class="botgrp"><div class="botgrphd"><span class="label">BOTS</span>`+
+    `<span class="gsum">${live}/${bots.length} live · ${money(bal)}</span></div>`+
+    `<div class="tilegrid">${bots.map(b=>botRow(b,catOf[b.name])).join("")}</div></div>`;
 
   if(!_botsWired){          // delegated once — innerHTML is replaced on every tick
     const host=$("bots");
