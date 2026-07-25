@@ -560,6 +560,40 @@ PAGE = r"""<!doctype html>
   .watching .wc{font-family:var(--mono);font-size:11.5px;color:var(--muted);}
   .watching .wc.on{color:var(--teal);font-weight:600;}
   .watching .wsep{color:var(--faint);font-size:10px;}
+
+  /* ===== square-tile bot layout (replaces table rows) ===== */
+  .tilegrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+    padding:12px 14px;}
+  @media(max-width:520px){.tilegrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}}
+  .tile{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    padding:13px 14px 12px;cursor:pointer;transition:border-color .12s ease,transform .12s ease,box-shadow .12s ease;
+    display:flex;flex-direction:column;gap:9px;min-height:150px;outline:none;}
+  .tile:hover{border-color:var(--muted);transform:translateY(-1px);}
+  .tile:focus-visible{outline:2px solid var(--amber);outline-offset:-2px;}
+  .tile.up{border-left:3px solid var(--teal);}
+  .tile.down{border-left:3px solid var(--brick);}
+  .tile.flat{border-left:3px solid var(--muted);}
+  .tile.off{opacity:.62;}
+  .tile .thead{display:flex;align-items:center;gap:7px;}
+  .tile .sdot{width:9px;height:9px;border-radius:50%;background:var(--faint);flex:none;}
+  .tile.on .sdot{background:var(--teal);}
+  .tile .tname{font-weight:700;font-size:14px;letter-spacing:-.01em;line-height:1.1;}
+  .tile .tdesc{font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.3;
+    max-height:26px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+  .tile .opct{position:absolute;top:11px;right:11px;font-family:var(--mono);font-size:9px;
+    color:var(--amber);border:1px solid rgba(240,168,60,.35);border-radius:4px;padding:0 4px;margin:0;}
+  .tile .tmetrics{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-top:2px;}
+  .tile .tm{display:flex;flex-direction:column;gap:1px;}
+  .tile .tm .k{font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);}
+  .tile .tm .v{font-family:var(--mono);font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .tile .tm .v.sm{font-size:11.5px;font-weight:600;}
+  .tile .tspark{margin-top:auto;}
+  .tile .tspark svg{min-width:100%;}
+  .tile .tfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .tile .tchev{color:var(--faint);font-size:13px;transition:transform .15s ease;}
+  .tile[aria-expanded="true"] .tchev{transform:rotate(90deg);}
+  .tile.detwrap{display:block;}
+  .botdet{margin-top:4px;border-top:1px solid var(--line);padding-top:12px;}
   .winbar{height:2px;border-radius:2px;background:var(--line);margin:3px 0 0 auto;max-width:46px;overflow:hidden;}
   .winbar>i{display:block;height:100%;background:var(--teal);border-radius:2px;}
   .pos-row{font-variant-numeric:tabular-nums;}
@@ -1225,20 +1259,24 @@ function botRow(b){
   const parrow=b.profit_pct>0.001?"▲ ":b.profit_pct<-0.001?"▼ ":"";
   const wr=b.trades?Math.round(b.winrate):0;
   const ex=botOpen.has(b.name);
-  // "—" not "$0.00" when the bot never answered /balance: a fake zero reads as a
-  // real drained wallet (honest-failure rule)
   const bal=b.has_balance?money(b.balance,b.currency||"USD"):"—";
-  return `<div class="botitem"><div class="botcols botrow ${health}${b.online?" on":""}" role="button" tabindex="0"
+  // SQUARE TILE: basic info always visible; advanced (open positions + watchlist +
+  // 30d equity) shows when expanded via the existing botOpen toggle.
+  return `<div class="tile ${health}${b.online?" on":""}${ex?" detwrap":""}" role="button" tabindex="0"
       aria-expanded="${ex}" data-bot="${b.name}" title="${b.name} — click for open positions &amp; watchlist">
-      <i class="sdot"></i>
-      <span class="bn"><span class="botnm">${b.name}</span><span class="botds">${b.desc}</span>${b.open.length?`<span class="opct">${b.open.length} open</span>`:""}</span>
-      <span class="c-spark">${sparkmini(b.equity)}</span>
-      <span class="num v">${bal}</span>
-      <span class="num v ${cls(b.profit_pct)}">${parrow}${pct(b.profit_pct)}</span>
-      <span class="num wr c-trades">${b.trades}</span>
-      <span class="num wr c-win">${b.trades?wr+"%":"—"}${b.trades?`<div class="winbar"><i style="width:${Math.min(100,wr)}%"></i></div>`:""}</span>
-      <span class="st"><span class="state ${sc}"><i class="livedot"></i>${stxt}</span></span>
-      <span class="chev">›</span></div>${ex?botDetail(b):""}</div>`;
+      <div class="thead"><i class="sdot"></i><span class="tname">${b.name}</span></div>
+      <div class="tdesc">${b.desc}</div>
+      ${b.open.length?`<span class="opct">${b.open.length} open</span>`:""}
+      <div class="tmetrics">
+        <div class="tm"><span class="k">Wallet</span><span class="v">${bal}</span></div>
+        <div class="tm"><span class="k">Closed P&amp;L</span><span class="v ${cls(b.profit_pct)}">${parrow}${pct(b.profit_pct)}</span></div>
+        <div class="tm"><span class="k">Trades</span><span class="v sm">${b.trades}</span></div>
+        <div class="tm"><span class="k">Win</span><span class="v sm">${b.trades?wr+"%":"—"}</span></div>
+      </div>
+      <div class="tspark">${sparkmini(b.equity)}</div>
+      <div class="tfoot"><span class="state ${sc}"><i class="livedot"></i>${stxt}</span><span class="tchev">›</span></div>
+      ${ex?botDetail(b):""}
+    </div>`;
 }
 
 function renderBots(bots){
@@ -1260,19 +1298,16 @@ function renderBots(bots){
     const sum=`${live}/${members.length} live · ${money(bal)}`;
     return `<div class="botgrp">
       <div class="botgrphd"><span class="label">${title}</span><span class="gsum">${sum}</span></div>
-      <div class="botcols botth"><span></span><span>Bot</span><span>30d</span><span class="num">Wallet</span>
-        <span class="num">Closed P&amp;L</span><span class="num">Trades</span><span class="num">Win</span>
-        <span class="st">State</span><span></span></div>
-      ${members.map(botRow).join("")}</div>`;
+      <div class="tilegrid">${members.map(botRow).join("")}</div></div>`;
   }).join("");
 
   if(!_botsWired){          // delegated once — innerHTML is replaced on every tick
     const host=$("bots");
     const toggle=el=>{const n=el.dataset.bot; botOpen.has(n)?botOpen.delete(n):botOpen.add(n); renderBots(_lastBots);};
-    host.addEventListener("click",e=>{const r=e.target.closest(".botrow"); if(r) toggle(r);});
+    host.addEventListener("click",e=>{const r=e.target.closest(".tile"); if(r) toggle(r);});
     host.addEventListener("keydown",e=>{
       if(e.key!=="Enter"&&e.key!==" ") return;
-      const r=e.target.closest(".botrow"); if(!r) return;
+      const r=e.target.closest(".tile"); if(!r) return;
       e.preventDefault(); toggle(r);
     });
     _botsWired=true;
