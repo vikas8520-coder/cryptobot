@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-24f"
+DASH_VERSION = "2026-07-25a"
 import csv
 from local_secrets import api_pw
 import json
@@ -405,8 +405,17 @@ def memory_full():
     return JSONResponse({"text": brake_memory.summary(prices)})
 
 
-@app.get("/", response_class=HTMLResponse)
-def index():
+@app.get("/")
+def index_root():
+    # Self-healing against frozen bfcache tabs: redirect to a versioned path so a
+    # stale tab (running old JS that ignores no-store) is forced onto a fresh URL after
+    # the first hard refresh. Every future deploy changes the path -> auto-redirect.
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/d/{DASH_VERSION}/", headers={"Cache-Control": "no-store, max-age=0"})
+
+
+@app.get("/d/{build}/", response_class=HTMLResponse)
+def index(build: str):
     # [cache-bust] no-store forces the browser to re-fetch every load, so a
     # stale tab never silently shows an old build after a dashboard deploy.
     # __DASH_VER__ is substituted from DASH_VERSION at request time.
