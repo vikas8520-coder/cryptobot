@@ -563,11 +563,14 @@ PAGE = r"""<!doctype html>
 
   /* ===== square-tile bot layout (replaces table rows) ===== */
   .tilegrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+    align-items:start;          /* each tile sizes to its own content; expanded tile
+                                   does NOT stretch its row-mates (row-expand bug fix) */
     padding:12px 14px;}
   @media(max-width:520px){.tilegrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}}
   .tile{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;
     padding:13px 14px 12px;cursor:pointer;transition:border-color .12s ease,transform .12s ease,box-shadow .12s ease;
-    display:flex;flex-direction:column;gap:9px;min-height:150px;outline:none;}
+    display:flex;flex-direction:column;gap:9px;min-height:150px;align-self:start;outline:none;}
+  .tile[aria-expanded="true"]{z-index:2;}   /* expanded detail paints above row-mates */
   .tile:hover{border-color:var(--muted);transform:translateY(-1px);}
   .tile:focus-visible{outline:2px solid var(--amber);outline-offset:-2px;}
   .tile.up{border-left:3px solid var(--teal);}
@@ -1293,9 +1296,11 @@ function renderBots(bots){
   const bal=bots.reduce((s,b)=>s+(b.has_balance?b.balance:0),0);
   const live=bots.filter(b=>b.online).length;
 
-  $("bots").innerHTML=`<div class="botgrp"><div class="botgrphd"><span class="label">BOTS</span>`+
+  // Flat layout: no section holder — each tile is a direct child of #bots so it
+  // expands independently (CSS grid align-items:start keeps row-mates from stretching).
+  $("bots").innerHTML=`<div class="botgrphd"><span class="label">BOTS</span>`+
     `<span class="gsum">${live}/${bots.length} live · ${money(bal)}</span></div>`+
-    `<div class="tilegrid">${bots.map(b=>botRow(b,catOf[b.name])).join("")}</div></div>`;
+    `<div class="tilegrid">${bots.map(b=>botRow(b,catOf[b.name])).join("")}</div>`;
 
   if(!_botsWired){          // delegated once — innerHTML is replaced on every tick
     const host=$("bots");
