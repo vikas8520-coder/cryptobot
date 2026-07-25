@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-23a"
+DASH_VERSION = "2026-07-24c"
 import csv
 from local_secrets import api_pw
 import json
@@ -500,76 +500,22 @@ PAGE = r"""<!doctype html>
      sparkline + open positions + watchlist) and overflowed the viewport at 9 bots
      (2026-07-22). Now: one scannable row per bot, detail on demand via expand. */
   .bots{display:flex;flex-direction:column;gap:14px;margin-bottom:30px;}
-  .botgrp{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
   .botgrphd{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;
     padding:7px 14px;background:var(--surface-2);border-bottom:1px solid var(--line);}
   .botgrphd .gsum{font-family:var(--mono);font-size:11.5px;color:var(--muted);
     font-variant-numeric:tabular-nums;}
-  /* one shared column template so every group's numbers line up down the page */
-  .botcols{display:grid;gap:10px;align-items:center;padding:6px 14px;
-    grid-template-columns:10px minmax(120px,2.4fr) 62px 92px 96px 52px 62px 78px 12px;}
-  .botcols .num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;}
-  .botcols .st{justify-self:end;}
-  .botth{border-bottom:1px solid var(--line);font-family:var(--mono);font-size:9.5px;
-    letter-spacing:.13em;text-transform:uppercase;color:var(--faint);}
-  .botth .st{text-align:right;}
-  .botitem+.botitem{border-top:1px solid var(--line);}
-  .botrow{cursor:pointer;transition:background .12s ease;}
-  .botrow:hover{background:var(--surface-2);}
-  .botrow:focus-visible{outline:2px solid var(--amber);outline-offset:-2px;}
-  .botrow.up{box-shadow:inset 3px 0 0 var(--teal);}
-  .botrow.down{box-shadow:inset 3px 0 0 var(--brick);}
-  .botrow.flat{box-shadow:inset 3px 0 0 var(--muted);}
-  .botrow .sdot{width:8px;height:8px;border-radius:50%;background:var(--faint);}
-  .botrow.on .sdot{background:var(--teal);}
-  .bn{display:flex;align-items:baseline;gap:8px;min-width:0;}
-  .botnm{font-weight:700;font-size:13.5px;letter-spacing:-.01em;white-space:nowrap;}
-  .botds{font-family:var(--mono);font-size:10.5px;color:var(--muted);
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .opct{font-family:var(--mono);font-size:9.5px;color:var(--amber);white-space:nowrap;
-    border:1px solid rgba(240,168,60,.35);border-radius:4px;padding:0 4px;}
-  .botcols .v{font-size:13.5px;font-weight:700;}
-  .botcols .wr{font-size:12.5px;color:var(--muted);}
-  .minispark{width:60px;height:18px;display:block;}
-  .nospark{font-family:var(--mono);font-size:11px;color:var(--faint);}
-  .chev{color:var(--faint);font-size:13px;line-height:1;transition:transform .15s ease;}
-  .botrow[aria-expanded="true"] .chev{transform:rotate(90deg);}
-  .botdet{display:grid;grid-template-columns:1.15fr 1fr;gap:12px 26px;padding:2px 16px 14px 27px;}
-  @media(max-width:900px){.botdet{grid-template-columns:1fr;}}
   .botdet .label{display:block;margin-bottom:7px;}
-  .state{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
-    padding:2px 7px;border-radius:20px;border:1px solid var(--line);white-space:nowrap;}
-  .state.run{color:var(--teal);border-color:rgba(63,199,168,.4);}
-  .state.paused{color:var(--amber);border-color:rgba(240,168,60,.4);}
-  .state.off{color:var(--brick);border-color:rgba(229,103,78,.4);}
-  svg.spark{width:100%;height:40px;display:block;}
-  .sparkempty{font-family:var(--mono);font-size:11px;color:var(--faint);}
-  .opens{display:flex;flex-direction:column;gap:7px;}
-  .opens .none{font-family:var(--mono);font-size:12px;color:var(--faint);}
-  .pos-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12.5px;gap:8px;}
-  .pos-row .p{color:var(--muted);}
-  .tag{font-family:var(--mono);font-size:9.5px;padding:1px 5px;border-radius:4px;letter-spacing:.05em;}
-  .tag.long{background:rgba(63,199,168,.16);color:var(--teal);}
-  .tag.short{background:rgba(229,103,78,.16);color:var(--brick);}
-  .state .livedot{display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:middle;}
-  .state.run .livedot{animation:livepulse 1.8s ease-in-out infinite;}
-  @keyframes livepulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.82);}}
-  @media(prefers-reduced-motion:reduce){.state.run .livedot{animation:none;}}
-  .watching{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;}
-  .watching .wl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-right:4px;}
-  .watching .wc{font-family:var(--mono);font-size:11.5px;color:var(--muted);}
-  .watching .wc.on{color:var(--teal);font-weight:600;}
-  .watching .wsep{color:var(--faint);font-size:10px;}
 
   /* ===== square-tile bot layout (replaces table rows) ===== */
   .tilegrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
     align-items:start;          /* each tile sizes to its own content; expanded tile
                                    does NOT stretch its row-mates (row-expand bug fix) */
+    overflow:visible;           /* expanded detail must never be clipped */
     padding:12px 14px;}
   @media(max-width:520px){.tilegrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}}
   .tile{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;
     padding:13px 14px 12px;cursor:pointer;transition:border-color .12s ease,transform .12s ease,box-shadow .12s ease;
-    display:flex;flex-direction:column;gap:9px;min-height:150px;align-self:start;outline:none;}
+    display:flex;flex-direction:column;gap:9px;min-height:150px;align-self:start;overflow:visible;outline:none;}
   .tile[aria-expanded="true"]{z-index:2;}   /* expanded detail paints above row-mates */
   .tile:hover{border-color:var(--muted);transform:translateY(-1px);}
   .tile:focus-visible{outline:2px solid var(--amber);outline-offset:-2px;}
