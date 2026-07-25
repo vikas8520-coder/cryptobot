@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-25c"
+DASH_VERSION = "2026-07-25d"
 import csv
 from local_secrets import api_pw
 import json
@@ -571,10 +571,15 @@ PAGE = r"""<!doctype html>
     border-radius:4px;user-select:none;-webkit-user-select:none;touch-action:none;}
   .tile .grip:hover{opacity:1;color:var(--muted);background:var(--surface-2);}
   .tile .grip:active{cursor:grabbing;}
-  .tile.dragging{opacity:.85;box-shadow:0 16px 40px rgba(0,0,0,.35);cursor:grabbing;
-    z-index:30;transition:none;}
-  .tile.drop-target{outline:2px dashed var(--amber);outline-offset:-2px;}
-  .tilegrid.dragging-on *{cursor:grabbing !important;}
+  /* While dragging: the tile is lifted OUT of grid flow (position:fixed) so its on-screen
+     anchor never moves — only a placeholder slot is shuffled, and siblings FLIP around it.
+     This is what removes the jump/flicker of the old in-flow re-insert approach. */
+  .tile.dragging{position:fixed;margin:0;z-index:1000;pointer-events:none;
+    box-shadow:0 16px 40px rgba(0,0,0,.35);transition:none;}
+  .tile-placeholder{border:1px dashed var(--line);border-radius:12px;background:var(--surface-2);
+    opacity:.45;transition:none;}
+  .tilegrid.dragging-on{cursor:grabbing !important;}
+  .tilegrid.dragging-on .tile:not(.dragging){will-change:transform;}
   @media(prefers-reduced-motion:reduce){.tile{transition:none;}}
   .tile .tchev{color:var(--faint);font-size:13px;transition:transform .15s ease;}
   .tile[aria-expanded="true"] .tchev{transform:rotate(90deg);}
@@ -1331,6 +1336,10 @@ function renderBots(bots){
 }
 
 // ---- drag-to-reorder with FLIP animation (smooth, no libs) ----
+// Approach: on pointerdown the dragged tile is lifted out of grid flow (position:fixed)
+// and a same-size placeholder takes its slot. During the move we only shuffle the PLACEHOLDER
+// between siblings; siblings FLIP (animate) to their new slots while the dragged tile follows
+// the cursor. Because the dragged tile is never re-inserted, it cannot jump -> no flicker.
 let _drag=null;
 function initDrag(host){
   host.addEventListener("pointerdown",e=>{
@@ -1338,13 +1347,24 @@ function initDrag(host){
     const tile=grip.closest(".tile"); if(!tile) return;
     e.preventDefault();
     const grid=host.querySelector(".tilegrid");
-    const tiles=[...grid.children];
+
+    // snapshot the tile's position/size, then lift it out of flow
     const rect=tile.getBoundingClientRect();
-    _drag={tile,grid,dx:e.clientX-rect.left,dy:e.clientY-rect.top,
-           startX:e.clientX,startY:e.clientY,offX:0,offY:0,moved:false};
-    // record first positions for FLIP
-    tiles.forEach(t=>t._flip=t.getBoundingClientRect());
-    tile.classList.add("dragging"); grid.classList.add("dragging-on");
+    const ph=document.createElement("div");
+    ph.className="tile-placeholder";
+    ph.style.width=rect.width+"px"; ph.style.height=rect.height+"px";
+    tile.parentNode.insertBefore(ph, tile);
+
+    tile.classList.add("dragging");
+    tile.style.width=rect.width+"px";
+    tile.style.height=rect.height+"px";
+    tile.style.left=rect.left+"px";
+    tile.style.top=rect.top+"px";
+    grid.classList.add("dragging-on");
+
+    _drag={tile,grid,ph,offX:e.clientX-rect.left,offY:e.clientY-rect.top,
+           startX:e.clientX,startY:e.clientY,moved:false,lastOver:ph};
+
     tile.setPointerCapture(e.pointerId);
     host.addEventListener("pointermove",onDragMove);
     host.addEventListener("pointerup",onDragEnd);
@@ -1353,50 +1373,71 @@ function initDrag(host){
 }
 function onDragMove(e){
   if(!_drag) return;
-  const {tile,grid,dx,dy}=_drag;
-  _drag.offX=e.clientX-_drag.startX; _drag.offY=e.clientY-_drag.startY;
-  if(Math.abs(_drag.offX)>3||Math.abs(_drag.offY)>3) _drag.moved=true;
-  tile.style.transform=`translate(${_drag.offX}px,${_drag.offY}px)`;
-  // hit-test: find tile under pointer (excluding the dragged one)
+  const {tile,grid,ph,offX,offY}=_drag;
+  _drag.moved=true;
+  // the tile simply follows the cursor (fixed positioning, no layout anchor to jump)
+  tile.style.left=(e.clientX-offX)+"px";
+  tile.style.top =(e.clientY-offY)+"px";
+
+  // figure out which real tile we're hovering (ignore the fixed tile + placeholder)
   tile.style.pointerEvents="none";
   const el=document.elementFromPoint(e.clientX,e.clientY);
   tile.style.pointerEvents="";
   const over=el&&el.closest&&el.closest(".tile");
-  grid.querySelectorAll(".drop-target").forEach(t=>{ if(t!==over) t.classList.remove("drop-target"); });
-  if(over && over!==tile){
-    over.classList.add("drop-target");
-    // decide insert before/after based on midpoint
+  if(over && over!==tile && over!==ph){
     const r=over.getBoundingClientRect();
     const after=(e.clientY-r.top)>r.height/2 || (e.clientX-r.left)>r.width/2;
-    if(after) over.after(tile); else over.before(tile);
-    // FLIP: animate siblings from their old slot to the new one
-    grid.querySelectorAll(".tile").forEach(t=>{
-      if(t===tile) return;
-      const first=t._flip, last=t.getBoundingClientRect();
-      const ddx=first.left-last.left, ddy=first.top-last.top;
-      if(ddx||ddy){
-        t.style.transition="none";
-        t.style.transform=`translate(${ddx}px,${ddy}px)`;
-        requestAnimationFrame(()=>{ t.style.transition="transform .2s ease"; t.style.transform=""; });
-      }
-    });
+    const target=after?over.nextSibling:over;
+    if(ph!==target){
+      // FLIP: record current sibling positions, move placeholder, then animate siblings
+      const sibs=[...grid.querySelectorAll(".tile")].filter(t=>t!==tile);
+      const first=new Map(sibs.map(t=>[t,t.getBoundingClientRect()]));
+      if(after) over.after(ph); else over.before(ph);
+      sibs.forEach(t=>{
+        const f=first.get(t), l=t.getBoundingClientRect();
+        const ddx=f.left-l.left, ddy=f.top-l.top;
+        if(ddx||ddy){
+          t.style.transition="none";
+          t.style.transform=`translate(${ddx}px,${ddy}px)`;
+          requestAnimationFrame(()=>{
+            t.style.transition="transform .18s cubic-bezier(.2,.7,.3,1)";
+            t.style.transform="";
+          });
+        }
+      });
+      _drag.lastOver=over;
+    }
   }
 }
 function onDragEnd(e){
   if(!_drag) return;
-  const {tile,grid}=_drag;
-  host_remove();
-  tile.classList.remove("dragging"); grid.classList.remove("dragging-on");
-  tile.style.transform=""; tile.style.transition="transform .2s ease";
-  grid.querySelectorAll(".drop-target").forEach(t=>t.classList.remove("drop-target"));
-  if(_drag.moved) saveOrder(grid);
+  const {tile,grid,ph,moved}=_drag;
+  const host=grid.closest("#bots")||document;
+  host.removeEventListener("pointermove",onDragMove);
+  host.removeEventListener("pointerup",onDragEnd);
+  host.removeEventListener("pointercancel",onDragEnd);
+
+  // settle the dragged tile into the placeholder's slot (smooth) then normalize
+  const pr=ph.getBoundingClientRect();
+  const tr=tile.getBoundingClientRect();
+  tile.style.transition="none";
+  tile.style.transform=`translate(${pr.left-tr.left}px,${pr.top-tr.top}px)`;
+  requestAnimationFrame(()=>{
+    tile.style.transition="left .18s cubic-bezier(.2,.7,.3,1),top .18s cubic-bezier(.2,.7,.3,1)";
+    tile.style.left=pr.left+"px"; tile.style.top=pr.top+"px"; tile.style.transform="";
+  });
+  const finish=()=>{
+    if(finish.done) return; finish.done=true;
+    tile.classList.remove("dragging");
+    tile.style.cssText="";               // drop fixed/width/height/left/top
+    if(ph.parentNode) ph.parentNode.replaceChild(tile, ph);
+    grid.classList.remove("dragging-on");
+    [...grid.querySelectorAll(".tile")].forEach(t=>{ t.style.transition=""; t.style.transform=""; t.style.willChange=""; });
+    if(moved) saveOrder(grid);
+  };
+  tile.addEventListener("transitionend", finish, {once:true});
+  setTimeout(finish, 260);               // fallback if transitionend doesn't fire
   _drag=null;
-  function host_remove(){
-    const host=grid.closest("#bots")||document;
-    host.removeEventListener("pointermove",onDragMove);
-    host.removeEventListener("pointerup",onDragEnd);
-    host.removeEventListener("pointercancel",onDragEnd);
-  }
 }
 function saveOrder(grid){
   const order=[...grid.querySelectorAll(".tile")].map(t=>t.dataset.bot);
