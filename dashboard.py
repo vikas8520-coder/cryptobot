@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-25a"
+DASH_VERSION = "2026-07-25b"
 import csv
 from local_secrets import api_pw
 import json
@@ -516,6 +516,15 @@ PAGE = r"""<!doctype html>
   .botgrphd .gsum{font-family:var(--mono);font-size:11.5px;color:var(--muted);
     font-variant-numeric:tabular-nums;}
   .botdet .label{display:block;margin-bottom:7px;}
+  /* watching list: must WRAP inside the card. The string has no spaces and '·' is not a
+     default break point, so without these rules it overflows the card's right edge (Bug 2). */
+  .botdet .watching{display:flex;flex-wrap:wrap;gap:4px 6px;max-width:100%;overflow-wrap:anywhere;
+    font-family:var(--mono);font-size:11px;line-height:1.5;}
+  .botdet .wc{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border:1px solid var(--line);
+    border-radius:5px;background:var(--surface);white-space:nowrap;}
+  .botdet .wc.on{color:var(--teal);border-color:rgba(63,199,168,.4);}
+  .botdet .wc .dot{width:5px;height:5px;border-radius:50%;background:var(--teal);}
+  .botdet .wsep{display:none;}
 
   /* ===== square/rectangular-tile bot layout (replaces table rows) ===== */
   .tilegrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
@@ -543,8 +552,9 @@ PAGE = r"""<!doctype html>
   .tile .tname{font-weight:700;font-size:14px;letter-spacing:-.01em;line-height:1.1;}
   .tile .tdesc{font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.3;
     max-height:26px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
-  .tile .opct{position:absolute;top:11px;right:11px;font-family:var(--mono);font-size:9px;
-    color:var(--amber);border:1px solid rgba(240,168,60,.35);border-radius:4px;padding:0 4px;margin:0;}
+  .tile .opct{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9px;
+    color:var(--amber);border:1px solid rgba(240,168,60,.35);border-radius:4px;padding:0 4px;margin:0;
+    white-space:nowrap;}
   .tile .tmetrics{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-top:2px;}
   .tile .tm{display:flex;flex-direction:column;gap:1px;}
   .tile .tm .k{font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);}
@@ -1246,7 +1256,6 @@ function botRow(b,cat){
       aria-expanded="${ex}" data-bot="${b.name}" title="${b.name} — click for open positions &amp; watchlist">
       <div class="thead"><i class="sdot"></i><span class="tname">${b.name}</span><span class="tcat">${cat}</span></div>
       <div class="tdesc">${b.desc}</div>
-      ${b.open.length?`<span class="opct">${b.open.length} open</span>`:""}
       <div class="tmetrics">
         <div class="tm"><span class="k">Wallet</span><span class="v">${bal}</span></div>
         <div class="tm"><span class="k">Closed P&amp;L</span><span class="v ${cls(b.profit_pct)}">${parrow}${pct(b.profit_pct)}</span></div>
@@ -1254,7 +1263,7 @@ function botRow(b,cat){
         <div class="tm"><span class="k">Win</span><span class="v sm">${b.trades?wr+"%":"—"}</span></div>
       </div>
       <div class="tspark">${sparkmini(b.equity)}</div>
-      <div class="tfoot"><span class="state ${sc}"><i class="livedot"></i>${stxt}</span><span class="tchev">›</span></div>
+      <div class="tfoot"><span class="state ${sc}"><i class="livedot"></i>${stxt}</span>${b.open.length?` <span class="opct">${b.open.length} open</span>`:""}<span class="tchev">›</span></div>
       ${ex?botDetail(b):""}
     </div>`;
 }
