@@ -826,15 +826,18 @@ const $=id=>document.getElementById(id);
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 document.documentElement.setAttribute("data-theme", localStorage.getItem("deskTheme")||"dark");
 
-// ---- stale-tab guard: hard-reload if the served build changed since this tab last loaded ----
-// no-store defeats normal caching but NOT bfcache on back/forward; this forces a fresh
-// fetch so an old (pre-fix) build can never silently render after a dashboard deploy.
+// ---- stale-tab self-heal (no reload loop) ----
+// The server 307-redirects "/" to "/d/<build>/" so every deploy changes the URL a frozen
+// bfcache tab (running old JS that ignores no-store) lands on. This client check handles the
+// case where a tab is frozen at an OLD "/d/<oldbuild>/" path: it moves to the current build
+// path ONCE via location.replace (no reload loop). We record the build only AFTER confirming
+// we're on the right path, so we never reload/replace twice.
 const DASH_BUILD="__DASH_BUILD__";
 try{
-  const prev=sessionStorage.getItem("dashBuild");
-  if(prev && prev!==DASH_BUILD){ location.reload(true); }
+  const wantPath="/d/"+DASH_BUILD+"/";
+  if(location.pathname!==wantPath){ location.replace(wantPath); }
   else { sessionStorage.setItem("dashBuild", DASH_BUILD); }
-}catch(e){ /* sessionStorage unavailable: skip guard */ }
+}catch(e){ /* sessionStorage/location unavailable: skip guard */ }
 
 // ---- price chart (candles + volume + 200-day line + buy/sell markers) ----
 const CHART_ASSETS=[
