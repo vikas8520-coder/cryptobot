@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-25b"
+DASH_VERSION = "2026-07-25c"
 import csv
 from local_secrets import api_pw
 import json
@@ -563,6 +563,19 @@ PAGE = r"""<!doctype html>
   .tile .tspark{margin-top:auto;}
   .tile .tspark svg{min-width:100%;}
   .tile .tfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  /* ---- draggable tiles ---- */
+  .tile{cursor:default;}
+  .tile .thead{cursor:pointer;}                 /* click header to expand/collapse */
+  .tile .grip{display:inline-flex;align-items:center;justify-content:center;width:14px;height:16px;
+    margin-right:1px;flex:none;color:var(--faint);cursor:grab;opacity:.5;transition:opacity .12s,color .12s;
+    border-radius:4px;user-select:none;-webkit-user-select:none;touch-action:none;}
+  .tile .grip:hover{opacity:1;color:var(--muted);background:var(--surface-2);}
+  .tile .grip:active{cursor:grabbing;}
+  .tile.dragging{opacity:.85;box-shadow:0 16px 40px rgba(0,0,0,.35);cursor:grabbing;
+    z-index:30;transition:none;}
+  .tile.drop-target{outline:2px dashed var(--amber);outline-offset:-2px;}
+  .tilegrid.dragging-on *{cursor:grabbing !important;}
+  @media(prefers-reduced-motion:reduce){.tile{transition:none;}}
   .tile .tchev{color:var(--faint);font-size:13px;transition:transform .15s ease;}
   .tile[aria-expanded="true"] .tchev{transform:rotate(90deg);}
   .tile.detwrap{display:block;}
@@ -1254,7 +1267,7 @@ function botRow(b,cat){
   // replaces the old CRYPTO / SHORT-TERM / PAPER EQUITY section headers.
   return `<div class="tile ${health}${b.online?" on":" "}${ex?" detwrap":""}" role="button" tabindex="0"
       aria-expanded="${ex}" data-bot="${b.name}" title="${b.name} — click for open positions &amp; watchlist">
-      <div class="thead"><i class="sdot"></i><span class="tname">${b.name}</span><span class="tcat">${cat}</span></div>
+      <div class="thead"><span class="grip" title="Drag to reorder" aria-hidden="true">⋮⋮</span><i class="sdot"></i><span class="tname">${b.name}</span><span class="tcat">${cat}</span></div>
       <div class="tdesc">${b.desc}</div>
       <div class="tmetrics">
         <div class="tm"><span class="k">Wallet</span><span class="v">${bal}</span></div>
@@ -1275,26 +1288,119 @@ function renderBots(bots){
   const catOf={};
   BOT_GROUPS.forEach(([title,names])=>names.forEach(n=>catOf[n]=title));
   bots.forEach(b=>{ if(!catOf[b.name]) catOf[b.name]="Other"; });
-  const bal=bots.reduce((s,b)=>s+(b.has_balance?b.balance:0),0);
-  const live=bots.filter(b=>b.online).length;
+
+  // apply persisted manual ordering (drag-reorder) on top of the incoming list
+  let ordered=bots.slice();
+  try{
+    const saved=JSON.parse(localStorage.getItem("botsOrder")||"null");
+    if(Array.isArray(saved) && saved.length){
+      const byName=new Map(bots.map(b=>[b.name,b]));
+      const seen=new Set();
+      const out=[];
+      saved.forEach(n=>{ if(byName.has(n) && !seen.has(n)){ out.push(byName.get(n)); seen.add(n); } });
+      bots.forEach(b=>{ if(!seen.has(b.name)) out.push(b); });   // append any new bots
+      ordered=out;
+    }
+  }catch(e){ /* bad stored order: ignore */ }
+
+  const bal=ordered.reduce((s,b)=>s+(b.has_balance?b.balance:0),0);
+  const live=ordered.filter(b=>b.online).length;
 
   // Flat layout: no section holder — each tile is a direct child of #bots so it
   // expands independently (CSS grid align-items:start keeps row-mates from stretching).
   $("bots").innerHTML=`<div class="botgrphd"><span class="label">BOTS</span>`+
-    `<span class="gsum">${live}/${bots.length} live · ${money(bal)}</span></div>`+
-    `<div class="tilegrid">${bots.map(b=>botRow(b,catOf[b.name])).join("")}</div>`;
+    `<span class="gsum">${live}/${ordered.length} live · ${money(bal)}</span></div>`+
+    `<div class="tilegrid">${ordered.map(b=>botRow(b,catOf[b.name])).join("")}</div>`;
 
   if(!_botsWired){          // delegated once — innerHTML is replaced on every tick
     const host=$("bots");
     const toggle=el=>{const n=el.dataset.bot; botOpen.has(n)?botOpen.delete(n):botOpen.add(n); renderBots(_lastBots);};
-    host.addEventListener("click",e=>{const r=e.target.closest(".tile"); if(r) toggle(r);});
+    host.addEventListener("click",e=>{
+      const r=e.target.closest(".tile"); if(!r) return;
+      if(e.target.closest(".grip")) return;        // grip is for dragging, not toggling
+      toggle(r);
+    });
     host.addEventListener("keydown",e=>{
       if(e.key!=="Enter"&&e.key!==" ") return;
       const r=e.target.closest(".tile"); if(!r) return;
       e.preventDefault(); toggle(r);
     });
+    initDrag(host);
     _botsWired=true;
   }
+}
+
+// ---- drag-to-reorder with FLIP animation (smooth, no libs) ----
+let _drag=null;
+function initDrag(host){
+  host.addEventListener("pointerdown",e=>{
+    const grip=e.target.closest(".grip"); if(!grip) return;
+    const tile=grip.closest(".tile"); if(!tile) return;
+    e.preventDefault();
+    const grid=host.querySelector(".tilegrid");
+    const tiles=[...grid.children];
+    const rect=tile.getBoundingClientRect();
+    _drag={tile,grid,dx:e.clientX-rect.left,dy:e.clientY-rect.top,
+           startX:e.clientX,startY:e.clientY,offX:0,offY:0,moved:false};
+    // record first positions for FLIP
+    tiles.forEach(t=>t._flip=t.getBoundingClientRect());
+    tile.classList.add("dragging"); grid.classList.add("dragging-on");
+    tile.setPointerCapture(e.pointerId);
+    host.addEventListener("pointermove",onDragMove);
+    host.addEventListener("pointerup",onDragEnd);
+    host.addEventListener("pointercancel",onDragEnd);
+  });
+}
+function onDragMove(e){
+  if(!_drag) return;
+  const {tile,grid,dx,dy}=_drag;
+  _drag.offX=e.clientX-_drag.startX; _drag.offY=e.clientY-_drag.startY;
+  if(Math.abs(_drag.offX)>3||Math.abs(_drag.offY)>3) _drag.moved=true;
+  tile.style.transform=`translate(${_drag.offX}px,${_drag.offY}px)`;
+  // hit-test: find tile under pointer (excluding the dragged one)
+  tile.style.pointerEvents="none";
+  const el=document.elementFromPoint(e.clientX,e.clientY);
+  tile.style.pointerEvents="";
+  const over=el&&el.closest&&el.closest(".tile");
+  grid.querySelectorAll(".drop-target").forEach(t=>{ if(t!==over) t.classList.remove("drop-target"); });
+  if(over && over!==tile){
+    over.classList.add("drop-target");
+    // decide insert before/after based on midpoint
+    const r=over.getBoundingClientRect();
+    const after=(e.clientY-r.top)>r.height/2 || (e.clientX-r.left)>r.width/2;
+    if(after) over.after(tile); else over.before(tile);
+    // FLIP: animate siblings from their old slot to the new one
+    grid.querySelectorAll(".tile").forEach(t=>{
+      if(t===tile) return;
+      const first=t._flip, last=t.getBoundingClientRect();
+      const ddx=first.left-last.left, ddy=first.top-last.top;
+      if(ddx||ddy){
+        t.style.transition="none";
+        t.style.transform=`translate(${ddx}px,${ddy}px)`;
+        requestAnimationFrame(()=>{ t.style.transition="transform .2s ease"; t.style.transform=""; });
+      }
+    });
+  }
+}
+function onDragEnd(e){
+  if(!_drag) return;
+  const {tile,grid}=_drag;
+  host_remove();
+  tile.classList.remove("dragging"); grid.classList.remove("dragging-on");
+  tile.style.transform=""; tile.style.transition="transform .2s ease";
+  grid.querySelectorAll(".drop-target").forEach(t=>t.classList.remove("drop-target"));
+  if(_drag.moved) saveOrder(grid);
+  _drag=null;
+  function host_remove(){
+    const host=grid.closest("#bots")||document;
+    host.removeEventListener("pointermove",onDragMove);
+    host.removeEventListener("pointerup",onDragEnd);
+    host.removeEventListener("pointercancel",onDragEnd);
+  }
+}
+function saveOrder(grid){
+  const order=[...grid.querySelectorAll(".tile")].map(t=>t.dataset.bot);
+  try{ localStorage.setItem("botsOrder",JSON.stringify(order)); }catch(e){}
 }
 
 function drawEquityChart(hist){
