@@ -1,0 +1,7 @@
+# Test-only dependencies. Runtime deps (ccxt, pandas, numpy, requests, fastapi, ...)
+# come from the ./.venv the bots already run in.
+#   .venv/bin/pip install -r requirements-dev.txt
+#   .venv/bin/python -m pytest
+#   .venv/bin/python -m pytest --cov=. --cov-report=term-missing
+pytest>=8.0
+pytest-cov>=5.0
