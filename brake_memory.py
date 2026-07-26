@@ -15,6 +15,7 @@ import json
 import os
 from datetime import datetime, timezone
 
+import state_io
 from state_io import save_json
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -33,17 +34,16 @@ def _days(a, b):
         return 0
 
 
-def _load():
-    if os.path.exists(EPISODES):
-        try:
-            return json.load(open(EPISODES))
-        except Exception:
-            pass
-    return {"open": {}, "closed": []}
+def _load(strict=False):
+    """Load the episodes store. strict=True (writers) raises StateCorrupt on a corrupt
+    file so we never OVERWRITE (and thus erase) a track record we merely failed to read;
+    readers pass strict=False and get an empty view with a logged warning."""
+    return state_io.load_json(EPISODES, {"open": {}, "closed": []}, strict=strict)
 
 
 def _save(e):
-    save_json(EPISODES, e, indent=2)              # atomic — see state_io.py
+    if not save_json(EPISODES, e, indent=2):      # atomic — see state_io.py
+        raise state_io.StateCorrupt(f"could not persist {os.path.basename(EPISODES)}")
 
 
 def record_flip(coin, from_state, to_state, price, sma, ts=None, note=""):
@@ -52,7 +52,9 @@ def record_flip(coin, from_state, to_state, price, sma, ts=None, note=""):
     with open(JOURNAL, "a") as f:
         f.write(json.dumps({"ts": ts, "coin": coin, "from": from_state,
                             "to": to_state, "price": price, "sma": sma, "note": note}) + "\n")
-    e = _load()
+    # strict: reading the store as empty here would let _save() wipe the entire
+    # history on the next line — raise instead (the caller keeps the alert queued)
+    e = _load(strict=True)
     if to_state == "above":                       # a hold begins
         # if an episode is somehow still open (a 'below' flip was missed — crash,
         # corrupt state), close it first with a flag instead of silently clobbering it
