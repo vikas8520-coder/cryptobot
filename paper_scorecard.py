@@ -59,7 +59,12 @@ def bot_stats(db_path):
     if not os.path.exists(db_path):
         return {"error": "db missing"}
     try:
-        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=10)
+        # Plain connect (NOT the URI 'mode=ro' form). The URI form intermittently
+        # throws "unable to open database file" on WAL-mode ledgers that still have
+        # a stale -wal/-shm from a SIGINT-killed bot (e.g. tradesv3_daytrade.sqlite
+        # after the 2026-07-24 mass stop). Plain connect reads WAL dbs fine, including
+        # live ones (spot/brakedhold still run) — same read path freqtrade's API uses.
+        con = sqlite3.connect(db_path, timeout=10)
         rows = con.execute(
             "SELECT close_profit_abs, close_date FROM trades "
             "WHERE is_open=0 AND close_profit_abs IS NOT NULL "
