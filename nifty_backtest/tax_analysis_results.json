@@ -1,0 +1,79 @@
+{
+  "tax_rate": 0.3,
+  "tds": 0.01,
+  "years": 17.6,
+  "results": [
+    {
+      "total_return_pct": 769.09,
+      "cagr_pct": 13.11,
+      "max_drawdown_pct": -36.34,
+      "trades": 1,
+      "win_rate_pct": 100.0,
+      "profit_factor": "inf",
+      "sharpe": 0.79,
+      "avg_hold_bars": 4328.0,
+      "time_in_market_pct": 100.0,
+      "variant": "B&H NIFTYBEES (daily, full)"
+    },
+    {
+      "total_return_pct": 529.66,
+      "cagr_pct": 11.05,
+      "max_drawdown_pct": -36.34,
+      "trades": 1,
+      "win_rate_pct": 100.0,
+      "profit_factor": "inf",
+      "sharpe": 0.66,
+      "avg_hold_bars": 4328.0,
+      "time_in_market_pct": 100.0,
+      "variant": "B&H NIFTYBEES AFTER-TAX"
+    },
+    {
+      "total_return_pct": 170.03,
+      "cagr_pct": 5.82,
+      "max_drawdown_pct": -23.0,
+      "trades": 79,
+      "win_rate_pct": 32.9,
+      "profit_factor": 2.63,
+      "sharpe": 0.54,
+      "avg_hold_bars": 37.5,
+      "time_in_market_pct": 68.5,
+      "variant": "V3-nostop (pre-tax, cross-check)"
+    },
+    {
+      "total_return_pct": -25.62,
+      "cagr_pct": -1.67,
+      "max_drawdown_pct": -53.81,
+      "trades": 79,
+      "win_rate_pct": 15.2,
+      "profit_factor": 0.89,
+      "sharpe": -0.08,
+      "avg_hold_bars": 37.5,
+      "time_in_market_pct": 68.5,
+      "variant": "V3-nostop AFTER-TAX"
+    },
+    {
+      "total_return_pct": -61.81,
+      "cagr_pct": -5.34,
+      "max_drawdown_pct": -71.04,
+      "trades": 79,
+      "win_rate_pct": 13.9,
+      "profit_factor": 0.5,
+      "sharpe": -0.41,
+      "avg_hold_bars": 29.1,
+      "time_in_market_pct": 53.2,
+      "variant": "V3 +5% stop AFTER-TAX"
+    },
+    {
+      "total_return_pct": -16.05,
+      "cagr_pct": -16.1,
+      "max_drawdown_pct": -16.05,
+      "trades": 16,
+      "win_rate_pct": 0.0,
+      "profit_factor": 0.0,
+      "sharpe": -4.06,
+      "avg_hold_bars": 1.0,
+      "time_in_market_pct": 0.9,
+      "variant": "V1 CURRENT hourly 10/30 AFTER-TAX"
+    }
+  ]
+}
