@@ -1,0 +1,11 @@
+[run]
+source = .
+omit =
+    tests/*
+    user_data/*
+    .venv/*
+
+[report]
+# `if __name__ == "__main__":` demo/CLI blocks are entry points, not logic.
+exclude_also =
+    if __name__ == .__main__.:
