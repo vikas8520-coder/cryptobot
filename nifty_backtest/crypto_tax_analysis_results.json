@@ -1,0 +1,228 @@
+{
+  "tax_rate": 0.3,
+  "tds": 0.01,
+  "fee_side": 0.001,
+  "spot_realized": {
+    "n": 27,
+    "pre": -21.493504809999997,
+    "post": -49.536243574,
+    "trades": [
+      {
+        "pair": "XRP/USDT",
+        "pnl": -1.31872384,
+        "tds": 0.9880192,
+        "gain_tax": 0.0,
+        "net": -2.30674304,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "LTC/USDT",
+        "pnl": -1.63311379,
+        "tds": 0.9856461999999999,
+        "gain_tax": 0.0,
+        "net": -2.61875999,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "ETH/USDT",
+        "pnl": -2.09071928,
+        "tds": 0.9801324,
+        "gain_tax": 0.0,
+        "net": -3.07085168,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "BTC/USDT",
+        "pnl": -0.76853569,
+        "tds": 0.9941878249999999,
+        "gain_tax": 0.0,
+        "net": -1.7627235149999998,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "XRP/USDT",
+        "pnl": -1.620468,
+        "tds": 0.9852299999999999,
+        "gain_tax": 0.0,
+        "net": -2.605698,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "LTC/USDT",
+        "pnl": -0.62020782,
+        "tds": 0.9956358000000001,
+        "gain_tax": 0.0,
+        "net": -1.6158436200000001,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "LTC/USDT",
+        "pnl": -2.83253256,
+        "tds": 0.9734868,
+        "gain_tax": 0.0,
+        "net": -3.80601936,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "ADA/USDT",
+        "pnl": -2.25137376,
+        "tds": 0.9794016000000001,
+        "gain_tax": 0.0,
+        "net": -3.23077536,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "ADA/USDT",
+        "pnl": -1.27274184,
+        "tds": 0.9892350999999999,
+        "gain_tax": 0.0,
+        "net": -2.26197694,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "BTC/USDT",
+        "pnl": -0.44046807,
+        "tds": 0.9916919319999999,
+        "gain_tax": 0.0,
+        "net": -1.4321600019999998,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "ETH/USDT",
+        "pnl": -1.17231839,
+        "tds": 0.9889241599999999,
+        "gain_tax": 0.0,
+        "net": -2.16124255,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "BTC/USDT",
+        "pnl": -0.95467549,
+        "tds": 0.988357216,
+        "gain_tax": 0.0,
+        "net": -1.9430327059999999,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "ETH/USDT",
+        "pnl": -0.76262913,
+        "tds": 0.99355385,
+        "gain_tax": 0.0,
+        "net": -1.75618298,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "LTC/USDT",
+        "pnl": 2.2329435,
+        "tds": 1.0241592,
+        "gain_tax": 0.66988305,
+        "net": 0.5389012500000002,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "ETH/USDT",
+        "pnl": -0.55347765,
+        "tds": 0.9954080400000002,
+        "gain_tax": 0.0,
+        "net": -1.54888569,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "LTC/USDT",
+        "pnl": -1.29812284,
+        "tds": 0.9887178,
+        "gain_tax": 0.0,
+        "net": -2.28684064,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "SOL/USDT",
+        "pnl": 0.82244032,
+        "tds": 1.0097152,
+        "gain_tax": 0.24673209599999998,
+        "net": -0.43400697600000004,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "SOL/USDT",
+        "pnl": -0.40558518,
+        "tds": 0.9972962999999999,
+        "gain_tax": 0.0,
+        "net": -1.40288148,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "ETH/USDT",
+        "pnl": 0.68026636,
+        "tds": 1.00879394,
+        "gain_tax": 0.20407990799999998,
+        "net": -0.5326074879999999,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "BTC/USDT",
+        "pnl": 0.37768422,
+        "tds": 1.000945384,
+        "gain_tax": 0.113305266,
+        "net": -0.73656643,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "ADA/USDT",
+        "pnl": -0.69459356,
+        "tds": 0.9949823100000003,
+        "gain_tax": 0.0,
+        "net": -1.6895758700000003,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "ETH/USDT",
+        "pnl": -0.43253823,
+        "tds": 0.9963710100000001,
+        "gain_tax": 0.0,
+        "net": -1.42890924,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "SOL/USDT",
+        "pnl": -0.67383202,
+        "tds": 0.9950884000000001,
+        "gain_tax": 0.0,
+        "net": -1.66892042,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "BTC/USDT",
+        "pnl": -0.45739958,
+        "tds": 0.9939766770000001,
+        "gain_tax": 0.0,
+        "net": -1.4513762570000002,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "ETH/USDT",
+        "pnl": -1.3088239,
+        "tds": 0.9873683,
+        "gain_tax": 0.0,
+        "net": -2.2961922,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "XRP/USDT",
+        "pnl": -1.16792559,
+        "tds": 0.9896328,
+        "gain_tax": 0.0,
+        "net": -2.15755839,
+        "reason": "exit_signal"
+      },
+      {
+        "pair": "LTC/USDT",
+        "pnl": -0.876033,
+        "tds": 0.9927810000000001,
+        "gain_tax": 0.0,
+        "net": -1.868814,
+        "reason": "exit_signal"
+      }
+    ]
+  }
+}
