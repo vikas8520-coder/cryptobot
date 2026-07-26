@@ -9,7 +9,6 @@ flip (🔴 below its line / 🟢 back above); quiet otherwise. You act MANUALLY 
 broker (Zerodha etc.) — this is signals, not execution.
 """
 import fcntl
-import json
 import os
 import re
 import sys
@@ -20,6 +19,7 @@ from zoneinfo import ZoneInfo
 import requests
 import yfinance as yf
 
+import state_io
 from state_io import save_json, verified_send
 
 warnings.filterwarnings("ignore")
@@ -48,13 +48,9 @@ def send(text):
     return verified_send(API, CHAT, text, feed_source="macro")
 
 
-def load_json(path, default):
-    if os.path.exists(path):
-        try:
-            return json.load(open(path))
-        except Exception:
-            pass
-    return default
+def load_json(path, default, strict=False):
+    """Shared loader (state_io): missing -> default, unreadable -> logged / StateCorrupt."""
+    return state_io.load_json(path, default, strict=strict)
 
 
 def brake_state(symbol):
@@ -105,7 +101,8 @@ def main():
 
     assets = load_json(WATCHLIST, {"assets": []}).get("assets", [])
     names = {a["symbol"]: a["name"] for a in assets}
-    state = load_json(STATE, {})
+    # strict: a corrupt state file must not read as a first run and re-baseline everything
+    state = load_json(STATE, {}, strict=True)
     first_run = not state
 
     now_iso = __import__("datetime").datetime.now(
@@ -132,7 +129,7 @@ def main():
     # CRASH-SAFE ORDERING: queue flip alerts into PENDING BEFORE committing state —
     # dying between the writes then re-detects the flip next run (at-least-once).
     if not first_run and flips:
-        pending = load_json(PENDING, [])
+        pending = load_json(PENDING, [], strict=True)
         for sym, old, new, price, sma in flips:
             nm = names.get(sym, sym)
             if new == "below":
@@ -145,9 +142,13 @@ def main():
                         f"Uptrend resumed — safe to hold again.")
             pending.append({"text": f"{head}\n\n{body}\n\n— Macro Brake · act via your broker · not financial advice"})
             print(f"ALERT queued: {sym} {old} -> {new}", flush=True)
-        save_json(PENDING, pending)
+        if not save_json(PENDING, pending):
+            # don't commit state that claims "no flip" while the alert never got queued
+            print("FATAL: could not queue flip alerts — state left uncommitted to retry", flush=True)
+            sys.exit(1)
 
-    save_json(STATE, snapshot, indent=2)          # atomic — see state_io.py
+    if not save_json(STATE, snapshot, indent=2):  # atomic — see state_io.py
+        print("state commit FAILED — flips re-detected next run", flush=True)
 
     if first_run:
         lines = ["📈 MACRO BRAKE — now watching stocks / bonds / gold.",
@@ -167,7 +168,8 @@ def main():
     pending = load_json(PENDING, [])
     remaining = [m for m in pending if not send(m["text"])]
     if remaining != pending:
-        save_json(PENDING, remaining)
+        if not save_json(PENDING, remaining):
+            print("queue rewrite FAILED — delivered alert(s) may be re-sent next run", flush=True)
     if remaining:
         print(f"{len(remaining)} alert(s) NOT delivered — retrying next run", flush=True)
     elif pending:

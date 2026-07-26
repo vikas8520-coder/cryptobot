@@ -302,7 +302,9 @@ def scan(coins):
 def main():
     """Alert loop: only speak when a NEW trendline event appears (state-deduped)."""
     coins = load_json(WATCHLIST, {"coins": DEFAULT_WATCH}).get("coins", DEFAULT_WATCH)
-    state = load_json(STATE, {})            # {coin: {"type","line_id"}}
+    # strict: a corrupt dedup state must not read as a first run — that re-baselines
+    # every coin and swallows the new trendline event it should have alerted on
+    state = load_json(STATE, {}, strict=True)   # {coin: {"type","line_id"}}
     first_run = not state
 
     src, ex = pick_exchange()
@@ -349,9 +351,11 @@ def main():
         if changed and not first_run:
             alerts.append(top)
 
-    save_json(STATE, new_state, indent=2)         # atomic — see state_io.py
-    save_json(BOARD, {"updated": now_iso, "source": src, "timeframe": TIMEFRAME,
-                      "coins": board}, indent=2)
+    if not save_json(STATE, new_state, indent=2):     # atomic — see state_io.py
+        log("dedup state commit FAILED — events may be re-alerted next run")
+    if not save_json(BOARD, {"updated": now_iso, "source": src, "timeframe": TIMEFRAME,
+                             "coins": board}, indent=2):
+        log("board cache write FAILED — dashboard may show a stale trendline board")
 
     if first_run:
         log("baseline established — will alert on new trendline events from next run")

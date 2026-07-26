@@ -6,7 +6,6 @@ When BTC makes a sharp move (>=5% in 24h), Telegram a breakdown of how each of t
 three bots reacted: who's long, who's short (offense), who's in cash (defense). Fires
 ONCE per move, then re-arms when BTC calms back under 3%, so no spam.
 """
-import json
 from local_secrets import api_pw
 import os
 import re
@@ -15,6 +14,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 import brake_alerts as ba   # reuse the reachable-exchange picker
+import state_io
 from state_io import save_json, verified_send
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -75,12 +75,9 @@ def describe(name, st):
 
 
 def main():
-    state = {}
-    if os.path.exists(STATE):
-        try:
-            state = json.load(open(STATE))
-        except Exception:
-            pass
+    # strict: a corrupt state file would read as "not fired" and re-fire an alert that
+    # already went out (spam), or mask a genuine armed state — fail loud instead
+    state = state_io.load_json(STATE, {}, strict=True)
     armed = not state.get("fired", False)
 
     move, src = btc_24h()
@@ -111,7 +108,8 @@ def main():
         state["fired"] = False     # re-arm for the next move
 
     state["last_move"] = round(move, 2)
-    save_json(STATE, state)        # atomic — see state_io.py
+    if not save_json(STATE, state):   # atomic — see state_io.py
+        print("state commit FAILED — arm/fire flag not persisted this run", flush=True)
 
 
 if __name__ == "__main__":
