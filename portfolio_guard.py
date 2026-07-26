@@ -14,17 +14,15 @@ Watches BOTH and enforces portfolio-level rules via their REST APIs. Priority or
 
 State persisted in guard_state.json; re-read each poll so /reset takes effect.
 """
-import requests, re, time, json, os
+import time, os
 from local_secrets import api_pw
-from requests.auth import HTTPBasicAuth
 
-from state_io import save_json, verified_send
+import freqtrade_api
+from freqtrade_api import get as api_get
+from state_io import load_json, save_json, telegram_conf, verified_send
 
 CONF = "/Users/vikasreddy/cryptobot/telegram.conf"
-_c = open(CONF).read()
-TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
-CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
-API = f"https://api.telegram.org/bot{TOK}"
+CHAT, API = telegram_conf(CONF)
 STATE = "/Users/vikasreddy/cryptobot/guard_state.json"
 # One-shot flag written by TraderJoy's /reset. The guardian is the SINGLE WRITER of
 # guard_state.json — /reset used to write it directly and could be silently clobbered
@@ -48,21 +46,9 @@ def send(text):
     return verified_send(API, CHAT, text, timeout=15, feed_source="guardian")
 
 
-def api_get(port, pw, ep):
-    try:
-        return requests.get(f"http://127.0.0.1:{port}/api/v1/{ep}",
-                            auth=HTTPBasicAuth("freqtrader", pw), timeout=8).json()
-    except Exception:
-        return None
-
-
 def api_post(port, pw, ep, body=None):
-    try:
-        return requests.post(f"http://127.0.0.1:{port}/api/v1/{ep}", json=body or {},
-                             auth=HTTPBasicAuth("freqtrader", pw), timeout=10).json()
-    except Exception as e:
-        print("post err", e, flush=True)
-        return {"error": str(e)}
+    """log=True: a guardian command that fails silently is how a breach goes unenforced."""
+    return freqtrade_api.post(port, pw, ep, body, log=True)
 
 
 def coin(pair):
@@ -70,12 +56,7 @@ def coin(pair):
 
 
 def load_state():
-    if os.path.exists(STATE):
-        try:
-            return json.load(open(STATE))
-        except Exception:
-            pass
-    return {}
+    return load_json(STATE, {})
 
 
 def main():

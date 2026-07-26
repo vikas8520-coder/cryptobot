@@ -19,15 +19,13 @@ Alert fires only when the target allocation CHANGES. Signals only — act via yo
 Audit-compliant: atomic state, verified sends, run lock, queue-before-commit.
 """
 import csv
-import fcntl
 import io
 import os
-import sys
 from datetime import datetime, timezone
 
 import brake_alerts as ba
 import macro_alerts as ma
-from state_io import save_json, save_text, verified_send
+from state_io import acquire_lock, load_json, save_json, save_text, verified_send
 
 BASE = ba.BASE
 STATE = os.path.join(BASE, "diversified_brake_state.json")
@@ -51,7 +49,7 @@ def send(text):
 
 def crypto_sleeve():
     """Crypto sleeve = fraction of the crypto watchlist above its 200-day line."""
-    coins = ba.load_json(ba.WATCHLIST, {"coins": ba.DEFAULT_WATCH}).get("coins", ba.DEFAULT_WATCH)
+    coins = load_json(ba.WATCHLIST, {"coins": ba.DEFAULT_WATCH}).get("coins", ba.DEFAULT_WATCH)
     src, ex = ba.pick_exchange()
     if ex is None:
         return None
@@ -183,14 +181,9 @@ def log_history(m):
 
 
 def main():
-    lock = open(os.path.join(BASE, ".diversified_brake.lock"), "w")
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        print("another run in progress — exiting", flush=True)
-        sys.exit(0)
+    lock = acquire_lock("diversified_brake")
 
-    state = ba.load_json(STATE, {})
+    state = load_json(STATE, {})
     first_run = not state
     m = build_map()
     if m is None:
@@ -207,7 +200,7 @@ def main():
 
     # crash-safe: queue the alert BEFORE committing state (at-least-once delivery)
     if not first_run and changed:
-        pending = ba.load_json(PENDING, [])
+        pending = load_json(PENDING, [])
         pending.append({"text": portfolio_text(
             m, header=f"🧭 DIVERSIFIED BRAKE — allocation {change_text(old_sig, m)}")})
         save_json(PENDING, pending)
@@ -219,7 +212,7 @@ def main():
         print("baseline established", flush=True)
         return
 
-    pending = ba.load_json(PENDING, [])
+    pending = load_json(PENDING, [])
     remaining = [x for x in pending if not send(x["text"])]
     if remaining != pending:
         save_json(PENDING, remaining)

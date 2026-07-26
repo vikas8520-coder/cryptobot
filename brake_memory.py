@@ -15,7 +15,7 @@ import json
 import os
 from datetime import datetime, timezone
 
-from state_io import save_json
+from state_io import load_json, save_json
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 JOURNAL = os.path.join(BASE, "brake_journal.jsonl")
@@ -34,12 +34,7 @@ def _days(a, b):
 
 
 def _load():
-    if os.path.exists(EPISODES):
-        try:
-            return json.load(open(EPISODES))
-        except Exception:
-            pass
-    return {"open": {}, "closed": []}
+    return load_json(EPISODES, {"open": {}, "closed": []})
 
 
 def _save(e):

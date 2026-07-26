@@ -18,26 +18,21 @@ Audit fixes (2026-07-19):
     guardian used to be invisible);
   - state writes are atomic (state_io).
 """
-import json
 from local_secrets import api_pw
 import os
-import re
 import subprocess
 import time
 
 import requests
-from requests.auth import HTTPBasicAuth
 
-from state_io import save_json, verified_send
+import freqtrade_api
+from state_io import load_json, save_json, telegram_conf, verified_send
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONF = os.path.join(BASE, "telegram.conf")
 STATE = os.path.join(BASE, "watchdog_state.json")
 BRAKE_STATE = os.path.join(BASE, "brake_alert_state.json")
-_c = open(CONF).read()
-TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
-CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
-API = f"https://api.telegram.org/bot{TOK}"
+CHAT, API = telegram_conf(CONF)
 
 # 2026-07-20: futures (OKX) bot brought back for 3-bot data analysis — watch it again.
 # 2026-07-20: added scalp (1m) + daytrade (15m) LAB bots — dry-run proof-of-fee-drag.
@@ -92,13 +87,11 @@ def check():
     """Return {problem_key: human_reason} for everything currently broken."""
     broken = {}
     for name, port, pw in BOTS:
-        try:
-            r = requests.get(f"http://127.0.0.1:{port}/api/v1/ping",
-                             auth=HTTPBasicAuth("freqtrader", pw), timeout=6)
-            if r.json().get("status") != "pong":
-                broken[f"bot:{name}"] = "not responding"
-        except Exception:
+        r = freqtrade_api.get(port, pw, "ping", timeout=6)
+        if r is None:
             broken[f"bot:{name}"] = "unreachable"
+        elif r.get("status") != "pong":
+            broken[f"bot:{name}"] = "not responding"
     try:
         if requests.get(DASHBOARD, timeout=6).status_code != 200:
             broken["dashboard"] = "bad status"
@@ -118,12 +111,7 @@ def check():
 
 
 def main():
-    st = {}
-    if os.path.exists(STATE):
-        try:
-            st = json.load(open(STATE))
-        except Exception:
-            pass
+    st = load_json(STATE, {})
     prev = set(st.get("broken", []))
     stale_pending = st.get("brake_stale_pending", False)
 

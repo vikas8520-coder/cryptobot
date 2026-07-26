@@ -19,23 +19,16 @@ Nothing here changes the bots. It changes what WE know.
 """
 import csv
 import os
-import re
 from datetime import datetime, timezone
 
-import requests
-from requests.auth import HTTPBasicAuth
-
 import stats_lib
-from state_io import verified_send
+from state_io import telegram_conf, verified_send
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONF = os.path.join(BASE, "telegram.conf")
 EQUITY = os.path.join(BASE, "equity_history.csv")
 LOG = os.path.join(BASE, "learning_log.md")
-_c = open(CONF).read()
-TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
-CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
-API = f"https://api.telegram.org/bot{TOK}"
+CHAT, API = telegram_conf(CONF)
 
 # Honest signal gates — below these, data is NOISE and we say so explicitly.
 MIN_TRADES_FOR_WINRATE = 30      # a win rate on <30 trades tells you almost nothing

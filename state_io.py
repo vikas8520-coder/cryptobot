@@ -13,14 +13,28 @@ audit found everywhere:
      happened (HTTP 200 + {"ok": true}), splitting >4096-char messages into
      chunks. The old fire-and-forget senders swallowed every failure, so a
      dropped alert looked identical to "all clear".
+
+Plus the three boilerplate blocks every job used to re-type by hand (a copy in each
+file meant a fix — e.g. a missing telegram.conf raising AttributeError at import —
+had to be made 9 times):
+
+  3. load_json:      exists -> try json.load -> except -> default.
+  4. telegram_conf:  parse TG_TOKEN/TG_CHAT out of telegram.conf into (chat, api).
+  5. acquire_lock:   flock a .<name>.lock so a manual run can't interleave with the
+     scheduled one and clobber the pending-alert queue.
 """
+import fcntl
 import json
 import os
+import re
+import sys
 from datetime import datetime, timezone
 
 import requests
 
 MAX_TG = 4096
+BASE = os.path.dirname(os.path.abspath(__file__))
+TG_CONF = os.path.join(BASE, "telegram.conf")
 FEED = os.path.join(os.path.dirname(os.path.abspath(__file__)), "activity_feed.jsonl")
 FEED_MAX_BYTES = 512 * 1024      # keep the feed bounded (dashboard reads the tail)
 FEED_KEEP_LINES = 300
@@ -40,6 +54,47 @@ def append_feed(source, text):
             save_text(FEED, "\n".join(lines) + "\n")
     except Exception as e:
         print(f"append_feed failed: {e}", flush=True)
+
+
+def load_json(path, default=None):
+    """Read JSON defensively: a missing file or corrupt/partial content yields default
+    (never an exception) — every loader in the stack already wanted exactly this."""
+    if os.path.exists(path):
+        try:
+            return json.load(open(path))
+        except Exception:
+            pass
+    return default
+
+
+def telegram_conf(path=TG_CONF):
+    """(chat_id, api_base) parsed from telegram.conf. api_base = the /bot<token> prefix
+    verified_send expects; the raw token is never returned so it can't get logged."""
+    try:
+        conf = open(path).read()
+        tok = re.search(r'TG_TOKEN="([^"]+)"', conf).group(1)
+        chat = str(re.search(r'TG_CHAT="([^"]+)"', conf).group(1))
+    except Exception as e:
+        raise RuntimeError(f"telegram.conf unreadable ({os.path.basename(path)}): {e}")
+    return chat, f"https://api.telegram.org/bot{tok}"
+
+
+def tg_token(api):
+    """The bare token back out of an api base — only the redactor should need it."""
+    return api.rsplit("/bot", 1)[-1]
+
+
+def acquire_lock(name, log=print):
+    """Serialize runs (manual + scheduled interleavings clobbered the pending queue).
+    Returns the lock file handle — KEEP IT REFERENCED, a GC'd handle drops the flock —
+    or exits 0 if another run already holds it."""
+    fh = open(os.path.join(BASE, f".{name}.lock"), "w")
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        log("another run already in progress — exiting quietly")
+        sys.exit(0)
+    return fh
 
 
 def save_json(path, obj, indent=None):

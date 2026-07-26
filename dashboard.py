@@ -15,12 +15,13 @@ import json
 import os
 import re
 
-import requests
 import uvicorn
-from requests.auth import HTTPBasicAuth
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+import freqtrade_api
+from state_io import load_json
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 GUARD = os.path.join(BASE, "guard_state.json")
@@ -37,14 +38,13 @@ START_EACH = 1000.0
 
 def read_macro():
     """Cached macro brake board (stocks/bonds/gold) from the 6h macro job."""
-    if not os.path.exists(MACRO_STATE):
+    state = load_json(MACRO_STATE)
+    if state is None:
         return []
     try:
-        state = json.load(open(MACRO_STATE))
         names = {}
-        if os.path.exists(MACRO_WATCH):
-            for a in json.load(open(MACRO_WATCH)).get("assets", []):
-                names[a["symbol"]] = a["name"]
+        for a in load_json(MACRO_WATCH, {}).get("assets", []):
+            names[a["symbol"]] = a["name"]
         out = []
         for sym, d in state.items():
             price, sma = d.get("price", 0), d.get("sma", 0)
@@ -70,10 +70,10 @@ def read_trend():
     """Cached trendline board (Tori's valid-line filters) from the 4h trendline job.
     Returns {updated, source, coins:[...]} or empty. Setups (bounce/break/reject)
     sort to the top; 'inside channel' coins fall below."""
-    if not os.path.exists(TREND_BOARD):
+    d = load_json(TREND_BOARD)
+    if d is None:
         return {}
     try:
-        d = json.load(open(TREND_BOARD))
         coins = d.get("coins", [])
         coins.sort(key=lambda c: (c.get("signal") is None, c.get("coin")))
         d["coins"] = coins
@@ -85,14 +85,11 @@ def read_trend():
 
 def read_portfolio():
     """Cached diversified-braked portfolio map (mirrors the /portfolio Telegram view)."""
-    if not os.path.exists(PORTFOLIO_BOARD):
+    d = load_json(PORTFOLIO_BOARD)
+    if d is None:
         return {}
-    try:
-        d = json.load(open(PORTFOLIO_BOARD))
-        d["_paused"] = _job_paused("divbrake")
-        return d
-    except Exception:
-        return {}
+    d["_paused"] = _job_paused("divbrake")
+    return d
 
 
 def read_activity(limit=40):
@@ -175,9 +172,8 @@ def candles(asset: str):
     a = asset.upper()
     try:
         if a in CRYPTO_COINS:
-            r = requests.get("http://127.0.0.1:8082/api/v1/pair_candles",
-                             params={"pair": f"{a}/USDT", "timeframe": "1d", "limit": 600},
-                             auth=HTTPBasicAuth("freqtrader", api_pw(8082)), timeout=10).json()
+            r = freqtrade_api.get(8082, api_pw(8082), "pair_candles", timeout=10,
+                                  params={"pair": f"{a}/USDT", "timeframe": "1d", "limit": 600})
             cols, data = r["columns"], r["data"]
             di, oi, hi, li, ci = (cols.index(k) for k in ("date", "open", "high", "low", "close"))
             vi = cols.index("volume") if "volume" in cols else None
@@ -302,11 +298,8 @@ def depth(asset: str):
 
 
 def api(port, pw, ep):
-    try:
-        return requests.get(f"http://127.0.0.1:{port}/api/v1/{ep}",
-                            auth=HTTPBasicAuth("freqtrader", pw), timeout=5).json()
-    except Exception:
-        return None
+    """5s: the page must stay snappy — a slow bot renders as offline, not as a hang."""
+    return freqtrade_api.get(port, pw, ep, timeout=5)
 
 
 @app.get("/api/overview")
@@ -356,25 +349,19 @@ def overview():
             "watching": [p.split("/")[0] for p in (wl.get("whitelist") or [])],
         })
 
-    g = {}
-    if os.path.exists(GUARD):
-        try:
-            g = json.load(open(GUARD))
-        except Exception:
-            g = {}
+    g = load_json(GUARD, {})
 
     brake = []
-    if os.path.exists(BRAKE_STATE):
-        try:
-            for coin, d in json.load(open(BRAKE_STATE)).items():
-                price, sma = d.get("price", 0), d.get("sma", 0)
-                brake.append({
-                    "coin": coin, "state": d.get("state"),
-                    "price": price,
-                    "gap": ((price / sma - 1) * 100) if sma else 0,
-                })
-        except Exception:
-            pass
+    try:
+        for coin, d in load_json(BRAKE_STATE, {}).items():
+            price, sma = d.get("price", 0), d.get("sma", 0)
+            brake.append({
+                "coin": coin, "state": d.get("state"),
+                "price": price,
+                "gap": ((price / sma - 1) * 100) if sma else 0,
+            })
+    except Exception:
+        pass
     brake.sort(key=lambda c: (c["state"] != "above", -c["gap"]))
     hold = sum(1 for c in brake if c["state"] == "above")
 
@@ -415,7 +402,7 @@ def brake_live():
     """On-demand FRESH brake status straight from the exchange (bypasses the hourly
     cache). Slower (~2-3s) — only runs when the button is clicked."""
     import brake_alerts as ba
-    watch = ba.load_json(ba.WATCHLIST, {"coins": ba.DEFAULT_WATCH}).get("coins", ba.DEFAULT_WATCH)
+    watch = load_json(ba.WATCHLIST, {"coins": ba.DEFAULT_WATCH}).get("coins", ba.DEFAULT_WATCH)
     src, ex = ba.pick_exchange()
     if ex is None:
         return JSONResponse({"error": "no exchange reachable right now"})
@@ -437,12 +424,7 @@ def brake_live():
 def memory_full():
     """The complete track-record text (same as the /memory Telegram command)."""
     import brake_memory
-    prices = {}
-    if os.path.exists(BRAKE_STATE):
-        try:
-            prices = {c: d.get("price") for c, d in json.load(open(BRAKE_STATE)).items()}
-        except Exception:
-            pass
+    prices = {c: d.get("price") for c, d in load_json(BRAKE_STATE, {}).items()}
     return JSONResponse({"text": brake_memory.summary(prices)})
 
 

@@ -6,24 +6,17 @@ When BTC makes a sharp move (>=5% in 24h), Telegram a breakdown of how each of t
 three bots reacted: who's long, who's short (offense), who's in cash (defense). Fires
 ONCE per move, then re-arms when BTC calms back under 3%, so no spam.
 """
-import json
 from local_secrets import api_pw
 import os
-import re
-
-import requests
-from requests.auth import HTTPBasicAuth
 
 import brake_alerts as ba   # reuse the reachable-exchange picker
-from state_io import save_json, verified_send
+import freqtrade_api
+from state_io import load_json, save_json, telegram_conf, verified_send
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONF = os.path.join(BASE, "telegram.conf")
 STATE = os.path.join(BASE, "sharp_move_state.json")
-_c = open(CONF).read()
-TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
-CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
-API = f"https://api.telegram.org/bot{TOK}"
+CHAT, API = telegram_conf(CONF)
 
 BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081)),
         ("Braked Hold", 8082, api_pw(8082))]
@@ -37,11 +30,7 @@ def send(text):
 
 
 def status(port, pw):
-    try:
-        return requests.get(f"http://127.0.0.1:{port}/api/v1/status",
-                            auth=HTTPBasicAuth("freqtrader", pw), timeout=6).json()
-    except Exception:
-        return None
+    return freqtrade_api.get(port, pw, "status", timeout=6)
 
 
 def btc_24h():
@@ -75,12 +64,7 @@ def describe(name, st):
 
 
 def main():
-    state = {}
-    if os.path.exists(STATE):
-        try:
-            state = json.load(open(STATE))
-        except Exception:
-            pass
+    state = load_json(STATE, {})
     armed = not state.get("fired", False)
 
     move, src = btc_24h()

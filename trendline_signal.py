@@ -34,9 +34,9 @@ from datetime import datetime, timezone
 # reuse the proven helpers instead of duplicating them
 from brake_alerts import (
     BASE, CHAT, SUBSCRIBERS, WATCHLIST, DEFAULT_WATCH,
-    pick_exchange, send_telegram, load_json, log,
+    pick_exchange, send_telegram, log,
 )
-from state_io import save_json
+from state_io import load_json, save_json
 
 STATE = os.path.join(BASE, "trendline_state.json")
 BOARD = os.path.join(BASE, "trendline_board.json")   # rich cache the dashboard reads

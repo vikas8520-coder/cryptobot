@@ -10,12 +10,12 @@ and this fired again on the next July 31 against a stale baseline. Now it is (a)
 IDEMPOTENT via a .done marker so a refire is a no-op, and (b) cleans up in the right
 order — remove the plist FIRST, then bootout last (nothing needs to run after).
 """
-import requests, re, json, os, subprocess
+import os, subprocess
 from local_secrets import api_pw
-from requests.auth import HTTPBasicAuth
 from datetime import datetime
 
-from state_io import verified_send, save_text
+from freqtrade_api import get as api
+from state_io import load_json, save_text, telegram_conf, verified_send
 
 BASE = "/Users/vikasreddy/cryptobot"
 CONF = f"{BASE}/telegram.conf"
@@ -23,23 +23,12 @@ BASELINE = f"{BASE}/forward_test_baseline.json"
 GUARD = f"{BASE}/guard_state.json"
 DONE = f"{BASE}/two_week_report.done"
 PLIST = os.path.expanduser("~/Library/LaunchAgents/com.vikas.tworeport.plist")
-_c = open(CONF).read()
-TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
-CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
-API = f"https://api.telegram.org/bot{TOK}"
+CHAT, API = telegram_conf(CONF)
 BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081))]
 
 
 def send(text):
     return verified_send(API, CHAT, text, feed_source="report")
-
-
-def api(port, pw, ep):
-    try:
-        return requests.get(f"http://127.0.0.1:{port}/api/v1/{ep}",
-                            auth=HTTPBasicAuth("freqtrader", pw), timeout=8).json()
-    except Exception:
-        return None
 
 
 def snapshot():
@@ -76,7 +65,7 @@ def main():
         cleanup()                     # make sure the stale plist is gone
         return
 
-    base = json.load(open(BASELINE)) if os.path.exists(BASELINE) else {}
+    base = load_json(BASELINE, {})
     now = snapshot()
     start = base.get("date", "?")
 
@@ -94,8 +83,8 @@ def main():
         lines.append(f"  Trades in period: {d_tr}")
         lines.append("")
 
-    if os.path.exists(GUARD):
-        g = json.load(open(GUARD))
+    g = load_json(GUARD, {})
+    if g:
         brk = "TRIPPED ⚠️" if g.get("breaker_tripped") else "armed, never tripped ✓"
         lines.append(f"🛡️ Guardian: {brk} | peak ${g.get('peak_balance',0):.0f}")
         lines.append("")

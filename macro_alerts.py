@@ -8,19 +8,14 @@ risk drivers, unlike crypto's fake internal diversification). Telegram alert ONL
 flip (🔴 below its line / 🟢 back above); quiet otherwise. You act MANUALLY via your
 broker (Zerodha etc.) — this is signals, not execution.
 """
-import fcntl
-import json
 import os
-import re
-import sys
 import warnings
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import requests
 import yfinance as yf
 
-from state_io import save_json, verified_send
+from state_io import acquire_lock, load_json, save_json, telegram_conf, verified_send
 
 warnings.filterwarnings("ignore")
 
@@ -37,24 +32,12 @@ MA_LEN = 200
 MARKETS = {"^NSEI": ("Asia/Kolkata", 15, 30)}
 DEFAULT_MARKET = ("America/New_York", 16, 0)      # SPY, QQQ, TLT, GLD (NYSE/Arca)
 
-_c = open(CONF).read()
-TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
-CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
-API = f"https://api.telegram.org/bot{TOK}"
+CHAT, API = telegram_conf(CONF)
 
 
 def send(text):
     """Verified send — True only if Telegram confirmed delivery."""
     return verified_send(API, CHAT, text, feed_source="macro")
-
-
-def load_json(path, default):
-    if os.path.exists(path):
-        try:
-            return json.load(open(path))
-        except Exception:
-            pass
-    return default
 
 
 def brake_state(symbol):
@@ -96,12 +79,7 @@ def fmt(v):
 
 def main():
     # serialize runs — interleaved manual+scheduled runs could clobber the pending queue
-    _lock = open(os.path.join(BASE, ".macro_alerts.lock"), "w")
-    try:
-        fcntl.flock(_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        print("another run already in progress — exiting quietly", flush=True)
-        sys.exit(0)
+    _lock = acquire_lock("macro_alerts")
 
     assets = load_json(WATCHLIST, {"assets": []}).get("assets", [])
     names = {a["symbol"]: a["name"] for a in assets}

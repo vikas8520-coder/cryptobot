@@ -3,16 +3,15 @@
 Weekly digest — a once-a-week Telegram summary of both trading bots + carry.
 Scheduled via launchd (Sunday evening). Send-only; coexists with the listener.
 """
-import requests, re, subprocess
+import requests, subprocess
 from local_secrets import api_pw
-from requests.auth import HTTPBasicAuth
 from datetime import datetime
 
+from freqtrade_api import get as api_get
+from state_io import telegram_conf
+
 CONF = "/Users/vikasreddy/cryptobot/telegram.conf"
-_c = open(CONF).read()
-TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
-CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
-API = f"https://api.telegram.org/bot{TOK}"
+CHAT, API = telegram_conf(CONF)
 PYBIN = "/Users/vikasreddy/cryptobot/.venv/bin/python3"
 MONITOR = "/Users/vikasreddy/cryptobot/funding_monitor.py"
 BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081))]
@@ -20,14 +19,6 @@ BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081))]
 
 def send(text):
     requests.post(f"{API}/sendMessage", data={"chat_id": CHAT, "text": text}, timeout=20)
-
-
-def api_get(port, pw, ep):
-    try:
-        return requests.get(f"http://127.0.0.1:{port}/api/v1/{ep}",
-                            auth=HTTPBasicAuth("freqtrader", pw), timeout=8).json()
-    except Exception:
-        return None
 
 
 def bot_section(name, port, pw):

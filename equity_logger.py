@@ -12,14 +12,12 @@ series stays clean if run multiple times a day.
 import csv
 from local_secrets import api_pw
 import io
-import json
 import os
 
-import requests
-from requests.auth import HTTPBasicAuth
 from datetime import datetime, timezone
 
-from state_io import save_json, save_text
+import freqtrade_api
+from state_io import load_json, save_json, save_text
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CSVF = os.path.join(BASE, "equity_history.csv")
@@ -34,32 +32,18 @@ FIELDS = ["date", "spot", "futures", "brakedhold", "btc_hold", "basket_hold"]
 
 
 def balance(port, pw):
-    try:
-        return requests.get(f"http://127.0.0.1:{port}/api/v1/balance",
-                            auth=HTTPBasicAuth("freqtrader", pw), timeout=6).json().get("total")
-    except Exception:
-        return None
+    return (freqtrade_api.get(port, pw, "balance", timeout=6) or {}).get("total")
 
 
 def prices():
-    if os.path.exists(BRAKE_STATE):
-        try:
-            return {c: d.get("price") for c, d in json.load(open(BRAKE_STATE)).items()}
-        except Exception:
-            pass
-    return {}
+    return {c: d.get("price") for c, d in load_json(BRAKE_STATE, {}).items()}
 
 
 def main():
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     px = prices()
 
-    st = {}
-    if os.path.exists(STATE):
-        try:
-            st = json.load(open(STATE))
-        except Exception:
-            st = {}
+    st = load_json(STATE, {})
     if "btc_start" not in st and px.get("BTC"):
         st = {"btc_start": px["BTC"], "start_date": today,
               "basket_start": {c: px[c] for c in BASKET if px.get(c)}}

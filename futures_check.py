@@ -11,7 +11,6 @@ breaker. Answers the two questions we care about:
 Sends the answer to Telegram, then removes its own launchd job so it never fires again.
 Reuses the tested /stats machinery (read-only SQLite) — no exchange calls.
 """
-import json
 import os
 import sqlite3
 import subprocess
@@ -20,7 +19,7 @@ from datetime import datetime, timezone
 import brake_alerts as ba
 import stats_lib
 import telegram_bot as t
-from state_io import verified_send
+from state_io import load_json, verified_send
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 JOB = "com.vikas.futurescheck"
@@ -57,12 +56,7 @@ def force_exits_split(change_iso):
 
 
 def main():
-    change_iso = "2026-07-20T19:35:26"
-    if os.path.exists(MARKER):
-        try:
-            change_iso = json.load(open(MARKER)).get("changed_utc", change_iso)
-        except Exception:
-            pass
+    change_iso = load_json(MARKER, {}).get("changed_utc", "2026-07-20T19:35:26")
 
     before, after = force_exits_split(change_iso)
     if before is None:

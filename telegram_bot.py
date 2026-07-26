@@ -9,20 +9,18 @@ can be polled by one listener). Proxies to each bot's Freqtrade REST API.
 Read commands:  /status /profit /balance /carry /summary /help
 Action commands: /pause <bot>   /resume <bot>   /close <bot> <id|all>
 """
-import requests, subprocess, re, time, os, json
+import requests, subprocess, time, os
 from local_secrets import api_pw
-from requests.auth import HTTPBasicAuth
 
-from state_io import save_json, verified_send
+from freqtrade_api import get as api_get, post as api_post
+from state_io import load_json, save_json, telegram_conf, tg_token, verified_send
 
 GUARD_STATE = "/Users/vikasreddy/cryptobot/guard_state.json"
 GUARD_RESET_REQ = "/Users/vikasreddy/cryptobot/guard_reset_request.json"
 
 CONF = "/Users/vikasreddy/cryptobot/telegram.conf"
-_c = open(CONF).read()
-TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
-CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
-API = f"https://api.telegram.org/bot{TOK}"
+CHAT, API = telegram_conf(CONF)
+TOK = tg_token(API)
 PYBIN = "/Users/vikasreddy/cryptobot/.venv/bin/python3"
 MONITOR = "/Users/vikasreddy/cryptobot/funding_monitor.py"
 
@@ -38,22 +36,6 @@ def redact(s):
 def send(text):
     """Verified, 4096-chunked send. Returns True only on confirmed delivery."""
     return verified_send(API, CHAT, text, timeout=15)
-
-
-def api_get(port, pw, ep):
-    try:
-        return requests.get(f"http://127.0.0.1:{port}/api/v1/{ep}",
-                            auth=HTTPBasicAuth("freqtrader", pw), timeout=6).json()
-    except Exception:
-        return None
-
-
-def api_post(port, pw, ep, body=None):
-    try:
-        return requests.post(f"http://127.0.0.1:{port}/api/v1/{ep}", json=body or {},
-                             auth=HTTPBasicAuth("freqtrader", pw), timeout=10).json()
-    except Exception as e:
-        return {"error": str(e)}
 
 
 def cmd_status(args):
@@ -112,7 +94,7 @@ def cmd_brake(args):
         import brake_alerts as ba
     except Exception as e:
         return f"❌ brake module error: {e}"
-    watch = ba.load_json(ba.WATCHLIST, {"coins": ba.DEFAULT_WATCH}).get("coins", ba.DEFAULT_WATCH)
+    watch = load_json(ba.WATCHLIST, {"coins": ba.DEFAULT_WATCH}).get("coins", ba.DEFAULT_WATCH)
     src, ex = ba.pick_exchange()
     if ex is None:
         return "❌ No reachable exchange right now — try again shortly."
@@ -144,13 +126,8 @@ def cmd_memory(args):
         import brake_memory
     except Exception as e:
         return f"❌ memory error: {e}"
-    prices = {}
     sf = "/Users/vikasreddy/cryptobot/brake_alert_state.json"
-    if os.path.exists(sf):
-        try:
-            prices = {c: d.get("price") for c, d in json.load(open(sf)).items()}
-        except Exception:
-            pass
+    prices = {c: d.get("price") for c, d in load_json(sf, {}).items()}
     return brake_memory.summary(current_prices=prices)
 
 
@@ -165,7 +142,7 @@ def _paused_note(job, board_file, subject, detail):
     base = os.path.dirname(os.path.abspath(__file__))
     when = "?"
     try:
-        b = json.load(open(os.path.join(base, board_file)))
+        b = load_json(os.path.join(base, board_file), {})
         ts = b.get("ts") or b.get("updated") or ""      # divbrake uses ts, trendline uses updated
         when = ts[:16].replace("T", " ") + " UTC" if ts else "?"
     except Exception:
@@ -222,7 +199,7 @@ def cmd_trend(args):
         import trendline_signal as ts
     except Exception as e:
         return f"❌ trendline module error: {e}"
-    coins = ts.load_json(ts.WATCHLIST, {"coins": ts.DEFAULT_WATCH}).get("coins", ts.DEFAULT_WATCH)
+    coins = load_json(ts.WATCHLIST, {"coins": ts.DEFAULT_WATCH}).get("coins", ts.DEFAULT_WATCH)
     src, ex = ts.pick_exchange()
     if ex is None:
         return "❌ No reachable exchange right now — try again shortly."
@@ -257,13 +234,12 @@ def cmd_macro(args):
     wf = "/Users/vikasreddy/cryptobot/macro_watchlist.json"
     if not os.path.exists(sf):
         return "📈 No macro data yet — the 6h job will populate it shortly."
-    try:
-        state = json.load(open(sf))
-    except Exception as e:
-        return f"❌ macro read error: {e}"
+    state = load_json(sf)
+    if state is None:
+        return "❌ macro read error: macro_alert_state.json is unreadable"
     names = {}
     try:
-        for a in json.load(open(wf)).get("assets", []):
+        for a in load_json(wf, {}).get("assets", []):
             names[a["symbol"]] = a["name"]
     except Exception:
         pass

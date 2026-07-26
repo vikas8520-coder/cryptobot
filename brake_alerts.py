@@ -18,18 +18,13 @@ so it fires once per confirmed daily close — no intraday flip-flopping.
 MVP sends to the single Telegram chat in telegram.conf (you). The subscriber list —
 per-user chat/email + their chosen coins — plugs in at SUBSCRIBERS below.
 """
-import fcntl
-import json
 import os
-import re
 import sys
-import time
 from datetime import datetime, timezone
 
 import ccxt
-import requests
 
-from state_io import save_json, verified_send
+from state_io import acquire_lock, load_json, save_json, telegram_conf, verified_send
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONF = os.path.join(BASE, "telegram.conf")
@@ -43,10 +38,7 @@ FETCH_LIMIT = 260               # 200 for the SMA + buffer + the dropped forming
 EXCHANGE_PRIORITY = ["binance", "okx", "kraken", "binanceus", "kucoin"]
 DEFAULT_WATCH = ["BTC", "ETH", "SOL", "XRP", "ADA", "LTC"]
 
-_c = open(CONF).read()
-TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
-CHAT = str(re.search(r'TG_CHAT="([^"]+)"', _c).group(1))
-API = f"https://api.telegram.org/bot{TOK}"
+CHAT, API = telegram_conf(CONF)
 
 # --- subscriber model (MVP = one chat). Replace with a DB/list to go multi-user. ---
 SUBSCRIBERS = [{"channel": "telegram", "chat_id": CHAT, "coins": None}]  # coins None = all watched
@@ -60,15 +52,6 @@ def log(msg):
 def send_telegram(chat_id, text):
     """Verified send — True only if Telegram confirmed delivery ({"ok": true})."""
     return verified_send(API, chat_id, text, feed_source="brake")
-
-
-def load_json(path, default):
-    if os.path.exists(path):
-        try:
-            return json.load(open(path))
-        except Exception:
-            pass
-    return default
 
 
 def pick_exchange():
@@ -103,20 +86,8 @@ def fmt(v):
     return f"${v:,.3f}" if v < 1 else f"${v:,.2f}"
 
 
-def acquire_lock(name):
-    """Serialize runs (manual + scheduled interleavings clobbered the pending queue).
-    Returns the lock file handle (keep it referenced) or exits if another run holds it."""
-    fh = open(os.path.join(BASE, f".{name}.lock"), "w")
-    try:
-        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        log("another run already in progress — exiting quietly")
-        sys.exit(0)
-    return fh
-
-
 def main():
-    _lock = acquire_lock("brake_alerts")
+    _lock = acquire_lock("brake_alerts", log=log)
     watch = load_json(WATCHLIST, {"coins": DEFAULT_WATCH}).get("coins", DEFAULT_WATCH)
     state = load_json(STATE, {})            # {coin: {"state","price","sma","since"}}
     first_run = not state
