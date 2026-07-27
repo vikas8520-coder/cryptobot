@@ -11,6 +11,9 @@ local_secrets.py
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.coverage
+htmlcov/
 
 # --- Trade databases (runtime data) ---
 *.sqlite

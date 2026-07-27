@@ -8,6 +8,8 @@ from local_secrets import api_pw
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
 
+from state_io import verified_send
+
 CONF = "/Users/vikasreddy/cryptobot/telegram.conf"
 _c = open(CONF).read()
 TOK = re.search(r'TG_TOKEN="([^"]+)"', _c).group(1)
@@ -19,7 +21,9 @@ BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081))]
 
 
 def send(text):
-    requests.post(f"{API}/sendMessage", data={"chat_id": CHAT, "text": text}, timeout=20)
+    """Verified send — the old fire-and-forget requests.post swallowed every failure,
+    so a dropped weekly digest looked identical to a delivered one."""
+    return verified_send(API, CHAT, text, feed_source="digest")
 
 
 def api_get(port, pw, ep):
@@ -80,7 +84,10 @@ def main():
     parts.append("")
     parts.append("💡 Paper money — your learning/preservation sandbox. "
                  "Judge nothing on one week; regimes play out over months.")
-    send("\n".join(parts))
+    if not send("\n".join(parts)):
+        print("weekly digest NOT delivered (Telegram unconfirmed)", flush=True)
+    else:
+        print("weekly digest delivered", flush=True)
 
 
 if __name__ == "__main__":

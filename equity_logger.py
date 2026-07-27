@@ -19,6 +19,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timezone
 
+import state_io
 from state_io import save_json, save_text
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -60,16 +61,14 @@ def main():
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     px = prices()
 
-    st = {}
-    if os.path.exists(STATE):
-        try:
-            st = json.load(open(STATE))
-        except Exception:
-            st = {}
+    # strict: a corrupt state file must not read as {} — that re-anchors the BTC/basket
+    # benchmark to TODAY's price, silently invalidating the whole apples-to-apples series
+    st = state_io.load_json(STATE, {}, strict=True)
     if "btc_start" not in st and px.get("BTC"):
         st = {"btc_start": px["BTC"], "start_date": today,
               "basket_start": {c: px[c] for c in BASKET if px.get(c)}}
-        save_json(STATE, st, indent=2)
+        if not save_json(STATE, st, indent=2):
+            print("equity state commit FAILED — benchmark anchor not persisted", flush=True)
 
     row = {"date": today}
     for name, port, pw in BOTS:
