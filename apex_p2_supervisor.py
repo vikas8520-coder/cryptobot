@@ -19,9 +19,10 @@ import urllib.request
 import urllib.error
 import datetime
 import os
+from local_secrets import api_pw
 
 PORT = 8085
-AUTH = ("freqtrader", "__REDACTED__")          # apexomni shim basic auth (local only)
+AUTH = ("freqtrader", api_pw(PORT))          # apexomni shim basic auth (local only)
 BASE = f"http://127.0.0.1:{PORT}/api/v1"
 LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apex_supervisor.log")
 LOG_KEEP = 400                             # lines; one run ~4 lines, ~100 runs of history

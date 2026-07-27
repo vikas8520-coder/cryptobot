@@ -42,8 +42,8 @@ API schemas in `.venv` to pin exact response shapes). Here is the build spec.
   (`local_secrets.py:9-15`), 8090 dashboard (`dashboard.py:1473`). → **ApeX takes 8085.**
 - **Auth is uniform:** every poller does `HTTPBasicAuth("freqtrader", api_pw(port))`
   against `http://127.0.0.1:{port}/api/v1/{ep}`. Username `"freqtrader"` is hard-coded in
-  all 9 callers; password comes from `local_secrets.api_pw(port)` with fallback
-  `f"<DEFAULT_PW>{port}"` (`local_secrets.py:18-19`).
+  all 9 callers; password comes from `local_secrets.api_pw(port)` (no fallback
+  hard-coded in callers).
 - **All 5 bots are `dry_run: true`** — confirmed by grep: `config.json:8`,
   `config_futures.json:8`, `config_scalp.json:8`, `config_daytrade.json:8`,
   `config_braked.json:8`, each with `dry_run_wallet: 1000`. No `dry_run` key appears in any
@@ -138,7 +138,7 @@ repo):
 
 | File:line | Current | Edit |
 |---|---|---|
-| `local_secrets.py:9-15` | ports 8080-8084 | add `8085: "__REDACTED__",   # apex (DEX)` |
+| `local_secrets.py:9-15` | ports 8080-8084 | add `8085: "<APEX_REST_PW>",   # apex (DEX)` |
 | `watchdog.py:45-47` | `BOTS` list of 5 | add `("ApeX", 8085, api_pw(8085))` |
 | `dashboard.py:156-162` | `BOTS` 4-tuples with desc | add `("ApeX", 8085, api_pw(8085), "ApeX Omni · DEX perps")` |
 | `dashboard.py:116-133` (`read_equity`) | column tuple `("spot","futures","brakedhold","btc_hold","basket_hold")` | add `"apex"` |
@@ -224,7 +224,7 @@ instead, consistent with the other 5.
   `config.json:86-88`), `config_apex.secret.json`, `apex_api.py`, `apex_engine.py` (loop
   that holds zero positions and just heartbeats), `com.vikas.bot.apex.plist`.
 - **Edit:** `local_secrets.py:9-15`; `watchdog.py:45-47`; `dashboard.py:156-162`.
-- **Verify:** `curl -u freqtrader:__REDACTED__ 127.0.0.1:8085/api/v1/{ping,status,balance,profit,show_config,whitelist,daily?timescale=30}`
+- **Verify:** `curl -u freqtrader:<APEX_REST_PW> 127.0.0.1:8085/api/v1/{ping,status,balance,profit,show_config,whitelist,daily?timescale=30}`
   returns the §1.2 shapes; the dashboard card renders "ApeX · online · $1000";
   `watchdog.py` prints `broken: none healthy`. **Ask before loading the plist**
   (CLAUDE.md: don't restart launchd jobs unless asked).

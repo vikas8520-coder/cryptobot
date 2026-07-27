@@ -21,14 +21,15 @@ import urllib.request
 import urllib.error
 import datetime
 import os
+from local_secrets import api_pw
 
-# ---- CONFIG: each bot = (label, port, password, seed_balance_for_drift_check) ----
+# ---- CONFIG: each bot = (label, port, seed_balance_for_drift_check); password from local_secrets ----
 BOTS = [
-    ("SPX",    8086, "__REDACTED__", 1000.0),
-    ("NIFTY",  8087, "__REDACTED__", 48278.0),
-    ("ONGC",    8088, "__REDACTED__", 48278.0),
-    ("ITC",     8089, "__REDACTED__", 48278.0),
-    ("BTC",     8091, "__REDACTED__", 500.0),   # 8090 is the dashboard, not a bot shim
+    ("SPX",    8086, 1000.0),
+    ("NIFTY",  8087, 48278.0),
+    ("ONGC",    8088, 48278.0),
+    ("ITC",     8089, 48278.0),
+    ("BTC",     8091, 500.0),   # 8090 is the dashboard, not a bot shim
 ]
 BLOBS = "/Users/vikasreddy/cryptobot/paper_supervisor.log"   # git-ignored (runtime state)
 LOG_KEEP = 500                                          # lines of history to retain
@@ -81,8 +82,8 @@ def main():
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     block = [f"PAPER TRACK | {stamp}"]
     any_unhealthy = False
-    for label, port, pw, seed in BOTS:
-        lines, bad = sample(label, port, pw, seed)
+    for label, port, seed in BOTS:
+        lines, bad = sample(label, port, api_pw(port), seed)
         any_unhealthy = any_unhealthy or bad
         block.extend(lines)
 
