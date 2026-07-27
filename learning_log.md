@@ -883,3 +883,30 @@ the freeze.
 **Both prototypes verified by backtest this session. Neither is wired to a live bot or
 plist. No live config/strategy changed. Delegate(Claude) created the files; Hermes
 re-verified the backtests + the walkforward_futures.py script independently.**
+
+## 2026-07-27 — Weekly Review
+
+**Vs buy & hold:**
+- spot: $978.51  (🔴 behind basket by $11.72)
+- brakedhold: $1002.22  (🟢 ahead of basket by $11.99)
+- benchmarks: BTC-hold $999.54 · basket-hold $990.23
+
+**Loss concentration:**
+- spot: 27 closed, biggest leak = 'exit_signal' (27× → -$21.49)
+- futures: 48 closed, biggest leak = 'exit_signal' (12× → -$9.70)
+- scalp: 5 closed, biggest leak = 'exit_signal' (4× → -$1.62)
+- daytrade: 8 closed, biggest leak = 'session_close' (7× → -$2.75)
+- apex: 2498 closed, biggest leak = 'stoploss' (5× → -$124.40)
+- spx: 7 closed, biggest leak = 'stoploss' (2× → -$12.20)
+- nifty: 1 closed, biggest leak = 'time_stop' (1× → -$69.35)
+- btc: 8 closed, biggest leak = 'stoploss' (3× → -$18.76)
+
+**Signal gate:** NOT MET — data still noise.
+- ⏳ Still gathering data — 2606/30 closed trades, ~1.1/4 weeks. Win rates below this are noise.
+- ⏳ Brake track record: 0/3 completed holds — no verdict on the 200-day brake until holds close.
+
+**Auto-observation (data only, not yet a lesson):**
+- spot: 27 closed, biggest leak = 'exit_signal' (27× → -$21.49) — consistent with the fee/whipsaw thesis from risk_backtest.
+- 1/2 bots beating the basket over 8 days of tracked equity.
+
+**→ For Claude to review next session:** promote any GATED lesson here into durable memory; if a bot is past the trade/week gate and still losing, raise the retire/replace decision with Vikas.

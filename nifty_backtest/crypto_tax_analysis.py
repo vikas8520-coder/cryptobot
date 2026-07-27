@@ -32,6 +32,7 @@ import os
 import sys
 import json
 import sqlite3
+from sqlite3 import Error as SQLiteError
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -52,19 +53,33 @@ BRAKE_BASKET = ["BTC", "ETH", "SOL", "XRP", "ADA", "LTC",
 # 1. SPOT — realized ledger, taxed per real trade
 # ---------------------------------------------------------------------------
 def spot_realized_after_tax(db_path):
-    con = sqlite3.connect(db_path)
-    rows = con.execute(
-        "SELECT pair, open_rate, close_rate, amount, close_profit_abs, "
-        "fee_open_cost, fee_close_cost, exit_reason FROM trades WHERE is_open=0 "
-        "ORDER BY close_date"
-    ).fetchall()
-    con.close()
+    if not os.path.exists(db_path):
+        print(f"  ERROR: db_path does not exist: {db_path}")
+        return None
+    try:
+        con = sqlite3.connect(db_path)
+        rows = con.execute(
+            "SELECT pair, open_rate, close_rate, amount, close_profit_abs, "
+            "fee_open_cost, fee_close_cost, exit_reason FROM trades WHERE is_open=0 "
+            "ORDER BY close_date"
+        ).fetchall()
+        con.close()
+    except SQLiteError as e:
+        print(f"  ERROR: SQLite error: {e}")
+        return None
     if not rows:
         return None
     trades = []
     pre_total = 0.0     # net of broker fees (close_profit_abs) pre-tax
     post_total = 0.0    # after India tax
     for pair, o, c, amt, pnl, fo, fc, reason in rows:
+        # Validate data types and ranges
+        if not isinstance(pair, str) or not pair:
+            print(f"  WARNING: skipping trade with invalid pair: {pair}")
+            continue
+        if c <= 0 or amt <= 0:
+            print(f"  WARNING: skipping trade {pair} with invalid close_rate={c} or amount={amt}")
+            continue
         exit_value = amt * c
         tds = TDS * exit_value
         gain_tax = TAX_RATE * pnl if pnl > 0 else 0.0     # no loss offset
@@ -81,14 +96,40 @@ def spot_realized_after_tax(db_path):
 # 2. BRAKEDHOLD — 200DMA brake backtest across the basket, pre vs post tax
 # ---------------------------------------------------------------------------
 def fetch_daily(symbol):
-    df = yf.Ticker(f"{symbol}-USD").history(period="5y", interval="1d")
-    df = df[["Open", "High", "Low", "Close"]].dropna()
+    try:
+        df = yf.Ticker(f"{symbol}-USD").history(period="5y", interval="1d")
+    except Exception as e:
+        print(f"  ERROR: yfinance fetch failed for {symbol}: {e}")
+        return None
+    if df is None or df.empty:
+        print(f"  ERROR: no data returned for {symbol}")
+        return None
+    required_cols = ["Open", "High", "Low", "Close"]
+    if not all(col in df.columns for col in required_cols):
+        print(f"  ERROR: missing required columns for {symbol}")
+        return None
+    df = df[required_cols].dropna()
+    if df.empty:
+        print(f"  ERROR: all NaN data for {symbol}")
+        return None
     df = df.reset_index()
+    if "Date" not in df.columns:
+        print(f"  ERROR: no Date column for {symbol}")
+        return None
     df["Date"] = pd.to_datetime(df["Date"]).dt.tz_localize(None)
     return df.sort_values("Date").reset_index(drop=True)
 
 
 def brake_signals(df):
+    if df is None or df.empty:
+        print("  ERROR: empty DataFrame in brake_signals")
+        return pd.Series(dtype=bool), pd.Series(dtype=bool)
+    if "Close" not in df.columns:
+        print(f"  ERROR: missing Close column in brake_signals")
+        return pd.Series(dtype=bool), pd.Series(dtype=bool)
+    if len(df) < 200:
+        print(f"  ERROR: insufficient data for 200DMA ({len(df)} < 200)")
+        return pd.Series(dtype=bool), pd.Series(dtype=bool)
     c = df["Close"]
     sma = c.rolling(200).mean()
     entry = (c > sma) & (c.shift(1) <= sma.shift(1))
@@ -103,15 +144,16 @@ def basket_backtest(symbols, fee_side=FEE_SIDE, tax_on=True):
     curves = []
     total_trades = 0
     for s in symbols:
-        try:
-            df = fetch_daily(s)
-        except Exception as e:
-            print(f"  skip {s}: {type(e).__name__}: {e}")
+        df = fetch_daily(s)
+        if df is None:
             continue
         if len(df) < 210:
             print(f"  skip {s}: only {len(df)} rows (<210 for 200DMA)")
             continue
         de, dx = brake_signals(df)
+        if de.empty or dx.empty:
+            print(f"  skip {s}: brake_signals returned empty")
+            continue
         eq, trades = ta.backtest_tax(df, de, dx, fee_side,
                                      stop=-1.0, max_hold_bars=0,
                                      gate=None, tax_on=tax_on)
@@ -129,12 +171,18 @@ def basket_backtest(symbols, fee_side=FEE_SIDE, tax_on=True):
 
 
 def metrics_from_equity(equity):
+    if equity is None or equity.empty:
+        print("  ERROR: empty equity Series in metrics_from_equity")
+        return {"total_return_pct": 0.0, "cagr_pct": 0.0, "max_drawdown_pct": 0.0}
+    if len(equity) < 2:
+        print("  ERROR: insufficient equity data (<2 points)")
+        return {"total_return_pct": 0.0, "cagr_pct": 0.0, "max_drawdown_pct": 0.0}
     years = (equity.index[-1] - equity.index[0]).days / 365.25
     total = equity.iloc[-1] / equity.iloc[0] - 1
-    cagr = (equity.iloc[-1]) ** (1 / years) - 1 if years > 0 else np.nan
+    cagr = (equity.iloc[-1] / equity.iloc[0]) ** (1 / years) - 1 if years > 0 else np.nan
     dd = (equity / equity.cummax() - 1).min()
     return {"total_return_pct": round(total * 100, 2),
-            "cagr_pct": round(cagr * 100, 2),
+            "cagr_pct": round(cagr * 100, 2) if not pd.isna(cagr) else 0.0,
             "max_drawdown_pct": round(dd * 100, 2)}
 
 
@@ -145,10 +193,17 @@ def main():
 
     # ---- SPOT: realized ledger ----
     print("\n[1] SPOT — REALIZED LEDGER (27 actual closed paper trades)\n")
-    sp = spot_realized_after_tax(
-        os.path.join(os.path.dirname(HERE), "tradesv3_trendfollow.sqlite"))
+    spot_db_path = os.path.join(os.path.dirname(HERE), "tradesv3_trendfollow.sqlite")
+    if not os.path.exists(spot_db_path):
+        print(f"  ERROR: spot ledger not found at {spot_db_path}")
+        sp = None
+    else:
+        sp = spot_realized_after_tax(spot_db_path)
     if sp:
         wallet = 1000.0   # spot bot started at $1000 (balance ~978 now pre-tax)
+        if wallet <= 0:
+            print("  ERROR: invalid wallet value")
+            wallet = 1.0  # avoid division by zero
         print(f"  closed trades     : {sp['n']}")
         print(f"  pre-tax  P&L      : ${sp['pre']:+.2f}  ({sp['pre']/wallet*100:+.2f}% of wallet)")
         print(f"  after-tax P&L     : ${sp['post']:+.2f}  ({sp['post']/wallet*100:+.2f}% of wallet)")
