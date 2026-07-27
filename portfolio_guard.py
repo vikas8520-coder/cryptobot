@@ -87,16 +87,23 @@ def main():
          f"• Both LONG same coin → auto-close futures duplicate (hedges left alone)")
 
     dd_breach_count = 0        # RULE 0 requires the breach on 2 CONSECUTIVE polls
+    corrupt_alerted = False    # edge-trigger the corruption alert, like every other one
     while True:
         try:
             # consume a /reset request (flag file written by TraderJoy) — this loop
             # is the single writer of guard_state.json, so no read-modify-write race
             try:
                 state = load_state()
+                corrupt_alerted = False        # re-arm for the next corruption episode
             except state_io.StateCorrupt as e:
-                # blind is safer than wrong: don't act on a blank breaker state
-                send(f"🚨 GUARDIAN: guard_state.json unreadable ({e}); skipping this "
-                     f"cycle and taking NO action. Fix/delete the file to resume.")
+                # blind is safer than wrong: don't act on a blank breaker state.
+                # Telegram ONCE per episode — the file stays broken until a human fixes
+                # it, and a message every POLL seconds would rate-limit real alerts out.
+                if not corrupt_alerted:
+                    corrupt_alerted = send(
+                        f"🚨 GUARDIAN: guard_state.json unreadable ({e}); taking NO "
+                        f"action until it is fixed/deleted. This alert is sent once.")
+                print(f"guard_state.json unreadable ({e}) — cycle skipped", flush=True)
                 dd_breach_count = 0
                 time.sleep(POLL)
                 continue
