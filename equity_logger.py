@@ -26,10 +26,16 @@ STATE = os.path.join(BASE, "equity_logger_state.json")
 BRAKE_STATE = os.path.join(BASE, "brake_alert_state.json")
 START = 1000.0
 BOTS = [("spot", 8080, api_pw(8080)), ("futures", 8081, api_pw(8081)),
-        ("brakedhold", 8082, api_pw(8082))]
+        ("brakedhold", 8082, api_pw(8082)), ("apex", 8085, api_pw(8085)),
+        ("spx", 8086, api_pw(8086)), ("nifty", 8087, api_pw(8087)),
+        ("ongc", 8088, api_pw(8088)), ("itc", 8089, api_pw(8089)),
+        ("btc", 8091, api_pw(8091))]   # 8091, NOT 8090 — 8090 is the dashboard
 BASKET = ["BTC", "ETH", "SOL", "XRP", "ADA", "LTC",
           "DOGE", "LINK", "BNB", "AVAX", "DOT", "TRX"]
-FIELDS = ["date", "spot", "futures", "brakedhold", "btc_hold", "basket_hold"]
+FIELDS = ["date", "spot", "futures", "brakedhold", "apex", "spx", "nifty", "ongc", "itc",
+          "btc", "btc_hold", "basket_hold"]
+# "btc" (the paper BOT's equity) is a different series from "btc_hold" (the buy-and-hold
+# benchmark) — the bot is exactly what btc_hold is the control for. Do not merge them.
 
 
 def balance(port, pw):

@@ -9,11 +9,15 @@ the page never blocks on exchange calls.
 
 Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 """
+
+# [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
+# the build shows in <title> and the no-store header forces a fresh fetch.
+DASH_VERSION = "2026-07-25d"
 import csv
 from local_secrets import api_pw
 import json
 import os
-import re
+import paper_fx                 # [PAPER EQUITY] INR->USD for the combined headline
 
 import uvicorn
 from fastapi import FastAPI
@@ -26,35 +30,10 @@ from state_io import load_json
 BASE = os.path.dirname(os.path.abspath(__file__))
 GUARD = os.path.join(BASE, "guard_state.json")
 BRAKE_STATE = os.path.join(BASE, "brake_alert_state.json")
-FUND_LOG = os.path.join(BASE, "funding_monitor.log")
 EQUITY_CSV = os.path.join(BASE, "equity_history.csv")
-MACRO_STATE = os.path.join(BASE, "macro_alert_state.json")
-MACRO_WATCH = os.path.join(BASE, "macro_watchlist.json")
-TREND_BOARD = os.path.join(BASE, "trendline_board.json")
 PORTFOLIO_BOARD = os.path.join(BASE, "diversified_brake_board.json")
 ACTIVITY_FEED = os.path.join(BASE, "activity_feed.jsonl")
 START_EACH = 1000.0
-
-
-def read_macro():
-    """Cached macro brake board (stocks/bonds/gold) from the 6h macro job."""
-    state = load_json(MACRO_STATE, None)
-    if state is None:
-        return []
-    try:
-        names = {}
-        for a in load_json(MACRO_WATCH, {}).get("assets", []):
-            names[a["symbol"]] = a["name"]
-        out = []
-        for sym, d in state.items():
-            price, sma = d.get("price", 0), d.get("sma", 0)
-            out.append({"symbol": sym, "name": names.get(sym, sym),
-                        "state": d.get("state"), "price": price,
-                        "gap": ((price / sma - 1) * 100) if sma else 0})
-        out.sort(key=lambda x: (x["state"] != "above", -x["gap"]))
-        return out
-    except Exception:
-        return []
 
 
 def _job_paused(job):
@@ -66,29 +45,15 @@ def _job_paused(job):
         os.path.expanduser(f"~/Library/LaunchAgents/com.vikas.{job}.plist"))
 
 
-def read_trend():
-    """Cached trendline board (Tori's valid-line filters) from the 4h trendline job.
-    Returns {updated, source, coins:[...]} or empty. Setups (bounce/break/reject)
-    sort to the top; 'inside channel' coins fall below."""
-    d = load_json(TREND_BOARD, None)
-    if d is None:
-        return {}
-    try:
-        coins = d.get("coins", [])
-        coins.sort(key=lambda c: (c.get("signal") is None, c.get("coin")))
-        d["coins"] = coins
-        d["_paused"] = _job_paused("trendline")
-        return d
-    except Exception:
-        return {}
-
-
 def read_portfolio():
     """Cached diversified-braked portfolio map (mirrors the /portfolio Telegram view)."""
     d = load_json(PORTFOLIO_BOARD, None)
     if d is None:
         return {}
-    d["_paused"] = _job_paused("divbrake")
+    # audit 2026-07-23: job was renamed divbrake -> diversified_brake on 07-20;
+    # the old label left the panel permanently FROZEN (probed a plist that now
+    # lives in disabled_plists/) even though the generator is loaded and active.
+    d["_paused"] = _job_paused("diversified_brake")
     return d
 
 
@@ -111,14 +76,15 @@ def read_activity(limit=40):
 
 def read_equity():
     """Parse equity_history.csv into a list of {date, spot, futures, brakedhold,
-    btc_hold, basket_hold} with numeric (or null) values, for the dashboard chart."""
+    apex, btc_hold, basket_hold} with numeric (or null) values, for the dashboard chart."""
     if not os.path.exists(EQUITY_CSV):
         return []
     out = []
     try:
         for r in csv.DictReader(open(EQUITY_CSV)):
             row = {"date": r.get("date", "")}
-            for k in ("spot", "futures", "brakedhold", "btc_hold", "basket_hold"):
+            for k in ("spot", "futures", "brakedhold", "spx", "nifty", "ongc", "itc",
+                      "btc", "btc_hold", "basket_hold"):
                 v = r.get(k)
                 try:
                     row[k] = float(v) if v not in (None, "") else None
@@ -130,32 +96,21 @@ def read_equity():
     return out
 
 
-def funding_status():
-    """Read the cached funding-carry line the daily job appends (never computes
-    live — that takes ~60s). Line shape: '2026-07-17 09:14 | AVG 4.0% 1.0%'."""
-    if not os.path.exists(FUND_LOG):
-        return None
-    try:
-        lines = [l for l in open(FUND_LOG).read().splitlines() if l.strip()]
-        if not lines:
-            return None
-        last = lines[-1]
-        when = last.split("|")[0].strip()
-        nums = re.findall(r"([\d.]+)%", last)
-        if len(nums) < 2:
-            return None
-        gross, net = float(nums[0]), float(nums[1])
-        verdict = "STRONG" if gross >= 20 else "MODEST" if gross >= 10 else "SKIP"
-        return {"gross": gross, "net": net, "verdict": verdict, "when": when}
-    except Exception:
-        return None
-
 BOTS = [
-    ("Spot", 8080, api_pw(8080), "Trend-follow · spot"),
-    ("Futures", 8081, api_pw(8081), "Long / short · futures"),
-    ("Braked Hold", 8082, api_pw(8082), "200-day brake · spot"),
-    ("Scalp", 8083, api_pw(8083), "VWAP reversion · 5m LAB"),
-    ("Day Trade", 8084, api_pw(8084), "Opening-range breakout · 1h LAB"),
+    ("Spot", 8080, api_pw(8080), "Trend-follow · spot · STAR live (backtest +41% PF1.19)"),
+    ("Futures", 8081, api_pw(8081), "Long/short · futures · BROKEN (WF 35% -> drop; 1d brake candidate)"),
+    ("Braked Hold", 8082, api_pw(8082), "200-day brake · spot · WINNER (backtest +1219% PF11)"),
+    ("Scalp", 8083, api_pw(8083), "VWAP reversion · 5m · BROKEN (drop; -66% even fee-free)"),
+    ("Day Trade", 8084, api_pw(8084), "ORB breakout · 1h · BROKEN (restarted; -90% backtest)"),
+    # ApeX removed 2026-07-23: synthetic-only paper engine whose balance inflated the
+    # real-money headline to +2641%/$301k (synthetic price-path bug, not real capital).
+    # Kept out of BOTS so the dashboard stops polling :8085 and the combined total is honest.
+    ("S&P 500", 8086, api_pw(8086), "SMA cross · SPY paper"),
+    ("Nifty 50", 8087, api_pw(8087), "SMA cross · NIFTYBEES paper"),
+    ("ONGC", 8088, api_pw(8088), "Dividend · ONGC 7.4%"),
+    ("ITC", 8089, api_pw(8089), "Dividend · ITC 5.7%"),
+    # 8091, NOT 8090 — this dashboard itself serves on 8090; a bot there would collide.
+    ("BTC", 8091, api_pw(8091), "SMA cross · BTC-USD paper"),
 ]
 
 app = FastAPI(title="Trading Desk")
@@ -331,8 +286,14 @@ def overview():
         bt = bal.get("total")
         has_bal = isinstance(bt, (int, float)) and not isinstance(bt, bool)
         b = bt if has_bal else 0
+        # each bot reports in its own currency. Freqtrade-native signal is
+        # stake_currency; the apex_api shim also echoes pair as "X/INR". Convert
+        # INR -> USD so the combined headline sums in ONE currency.
+        sc = (cfg.get("stake_currency") or "").upper()
+        pair = (cfg.get("pair") or "").upper()
+        currency = "INR" if (sc == "INR" or pair.endswith("/INR")) else "USD"
         if has_bal:
-            tot_bal += b
+            tot_bal += paper_fx.to_usd(b, currency)
         # 30-day realized-equity sparkline from the /daily endpoint (most-recent-first)
         eq = []
         daily = api(port, pw, "daily?timescale=30")
@@ -351,6 +312,7 @@ def overview():
             "trades": prof.get("closed_trade_count", 0) or 0,
             "winrate": (prof.get("winrate", 0) or 0) * 100,
             "open": opens, "equity": eq,
+            "currency": currency,    # [PAPER EQUITY] lets the card show ₹ vs $ per-bot
             # the coin universe the bot is monitoring (base symbols), incl. any open-trade
             # pairs Freqtrade auto-adds; lets the card show "watching" even when flat
             "watching": [p.split("/")[0] for p in (wl.get("whitelist") or [])],
@@ -386,6 +348,7 @@ def overview():
     return JSONResponse({
         "bots": bots,
         "total_balance": tot_bal,
+        "total_currency": "USD",   # [PAPER EQUITY] INR bots converted -> honest combined $
         "total_pnl_pct": (tot_bal / start_total - 1) * 100 if start_total else 0,
         "bots_reporting": n_reporting, "bots_missing": missing,
         "guardian": {
@@ -394,12 +357,9 @@ def overview():
             "peak": g.get("peak_balance", 0) or 0,
         },
         "brake": brake, "brake_hold": hold, "brake_total": len(brake),
-        "macro": read_macro(),
-        "trend": read_trend(),
         "portfolio": read_portfolio(),
         "activity": read_activity(),
         "memory": mem,
-        "funding": funding_status(),
         "equity_history": read_equity(),
     })
 
@@ -435,15 +395,32 @@ def memory_full():
     return JSONResponse({"text": brake_memory.summary(prices)})
 
 
-@app.get("/", response_class=HTMLResponse)
-def index():
-    return PAGE
+@app.get("/")
+def index_root():
+    # Self-healing against frozen bfcache tabs: redirect to a versioned path so a
+    # stale tab (running old JS that ignores no-store) is forced onto a fresh URL after
+    # the first hard refresh. Every future deploy changes the path -> auto-redirect.
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/d/{DASH_VERSION}/", headers={"Cache-Control": "no-store, max-age=0"})
+
+
+@app.get("/d/{build}/", response_class=HTMLResponse)
+def index(build: str):
+    # [cache-bust] no-store forces the browser to re-fetch every load, so a
+    # stale tab never silently shows an old build after a dashboard deploy.
+    # __DASH_VER__ is substituted from DASH_VERSION at request time.
+    # __DASH_BUILD__ is the same value, exposed to JS for the stale-tab hard-reload guard.
+    return HTMLResponse(
+        PAGE.replace("__DASH_VER__", DASH_VERSION).replace("__DASH_BUILD__", DASH_VERSION),
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 PAGE = r"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trading Desk</title>
+<meta http-equiv="Cache-Control" content="no-store">
+<title>Trading Desk · build __DASH_VER__</title>
 <style>
   :root{
     --ground:#0E1420; --surface:#161E2E; --surface-2:#1C2739; --line:#26314A;
@@ -465,7 +442,6 @@ PAGE = r"""<!doctype html>
   @media(min-width:1200px){.deskgrid{grid-template-columns:1.65fr 1fr;align-items:start;}}
   .deskmain{min-width:0;} .deskrail{min-width:0;}
   .deskrail .board{grid-template-columns:repeat(3,minmax(0,1fr));}
-  .deskrail .macroboard{grid-template-columns:1fr 1fr;}
   .deskrail .brakehead:first-child .sec, .deskmain > .sec:first-child{margin-top:0!important;}
   .panelrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-top:26px;}
   .panelrow > div{min-width:0;}
@@ -519,45 +495,90 @@ PAGE = r"""<!doctype html>
   h2.sec{font-size:12px;font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;
     color:var(--muted);margin:0 0 13px;font-weight:600;}
 
-  .bots{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-bottom:30px;}
-  .bot{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:18px;display:flex;flex-direction:column;gap:14px;}
-  .bot .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
-  .bot .nm{font-weight:700;font-size:16px;letter-spacing:-.01em;}
-  .bot .ds{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px;}
-  .state{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
-    padding:4px 9px;border-radius:20px;border:1px solid var(--line);white-space:nowrap;}
-  .state.run{color:var(--teal);border-color:rgba(63,199,168,.4);}
-  .state.paused{color:var(--amber);border-color:rgba(240,168,60,.4);}
-  .state.off{color:var(--brick);border-color:rgba(229,103,78,.4);}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px 10px;}
-  .metric .label{display:block;margin-bottom:4px;}
-  .metric .v{font-family:var(--mono);font-size:19px;font-weight:700;}
-  .sparkwrap{border-top:1px solid var(--line);padding-top:11px;}
-  .sparkwrap .label{display:block;margin-bottom:7px;}
-  svg.spark{width:100%;height:40px;display:block;}
-  .sparkempty{font-family:var(--mono);font-size:11px;color:var(--faint);}
-  .opens{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:7px;}
-  .opens .none{font-family:var(--mono);font-size:12px;color:var(--faint);}
-  .pos-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12.5px;gap:8px;}
-  .pos-row .p{color:var(--muted);}
-  .tag{font-family:var(--mono);font-size:9.5px;padding:1px 5px;border-radius:4px;letter-spacing:.05em;}
-  .tag.long{background:rgba(63,199,168,.16);color:var(--teal);}
-  .tag.short{background:rgba(229,103,78,.16);color:var(--brick);}
-  /* --- bot-card visual upgrades --- */
-  .bot.up{box-shadow:inset 3px 0 0 var(--teal);}
-  .bot.down{box-shadow:inset 3px 0 0 var(--brick);}
-  .bot.flat{box-shadow:inset 3px 0 0 var(--muted);}
-  .metric .v{font-variant-numeric:tabular-nums;}
-  .state .livedot{display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:middle;}
-  .state.run .livedot{animation:livepulse 1.8s ease-in-out infinite;}
-  @keyframes livepulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.82);}}
-  @media(prefers-reduced-motion:reduce){.state.run .livedot{animation:none;}}
-  .watching{border-top:1px solid var(--line);margin-top:11px;padding-top:9px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;}
-  .watching .wl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-right:4px;}
-  .watching .wc{font-family:var(--mono);font-size:11.5px;color:var(--muted);}
-  .watching .wc.on{color:var(--teal);font-weight:600;}
-  .watching .wsep{color:var(--faint);font-size:10px;}
-  .winbar{height:4px;border-radius:2px;background:var(--line);margin-top:7px;max-width:76px;overflow:hidden;}
+  /* ---- BOT TABLE ----
+     This is a MONITOR surface: 11 bots have to fit one screen. The old 3-col tile
+     grid gave every bot a full card (wallet + P&L + trades + win-bar + 30-day
+     sparkline + open positions + watchlist) and overflowed the viewport at 9 bots
+     (2026-07-22). Now: one scannable row per bot, detail on demand via expand. */
+  .bots{display:flex;flex-direction:column;gap:14px;margin-bottom:30px;}
+  .botgrphd{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;
+    padding:7px 14px;background:var(--surface-2);border-bottom:1px solid var(--line);}
+  .botgrphd .gsum{font-family:var(--mono);font-size:11.5px;color:var(--muted);
+    font-variant-numeric:tabular-nums;}
+  .botdet .label{display:block;margin-bottom:7px;}
+  /* watching list: must WRAP inside the card. The string has no spaces and '·' is not a
+     default break point, so without these rules it overflows the card's right edge (Bug 2). */
+  .botdet .watching{display:flex;flex-wrap:wrap;gap:4px 6px;max-width:100%;overflow-wrap:anywhere;
+    font-family:var(--mono);font-size:11px;line-height:1.5;}
+  .botdet .wc{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border:1px solid var(--line);
+    border-radius:5px;background:var(--surface);white-space:nowrap;}
+  .botdet .wc.on{color:var(--teal);border-color:rgba(63,199,168,.4);}
+  .botdet .wc .dot{width:5px;height:5px;border-radius:50%;background:var(--teal);}
+  .botdet .wsep{display:none;}
+
+  /* ===== square/rectangular-tile bot layout (replaces table rows) ===== */
+  .tilegrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+    align-items:start;          /* each tile sizes to its own content; expanded tile
+                                   does NOT stretch its row-mates (row-expand bug fix) */
+    overflow:visible;           /* expanded detail must never be clipped */
+    padding:12px 14px;}
+  @media(max-width:560px){.tilegrid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));}}
+  .tile{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    padding:11px 14px 10px;cursor:pointer;transition:border-color .12s ease,transform .12s ease,box-shadow .12s ease;
+    display:flex;flex-direction:column;gap:8px;min-height:118px;align-self:start;overflow:visible;outline:none;}
+  .tile[aria-expanded="true"]{z-index:2;}   /* expanded detail paints above row-mates */
+  .tile:hover{border-color:var(--muted);transform:translateY(-1px);}
+  .tile:focus-visible{outline:2px solid var(--amber);outline-offset:-2px;}
+  .tile.up{border-left:3px solid var(--teal);}
+  .tile.down{border-left:3px solid var(--brick);}
+  .tile.flat{border-left:3px solid var(--muted);}
+  .tile.off{opacity:.62;}
+  .tile .thead{display:flex;align-items:center;gap:7px;}
+  .tile .sdot{width:9px;height:9px;border-radius:50%;background:var(--faint);flex:none;}
+  .tile.on .sdot{background:var(--teal);}
+  .tile .tcat{margin-left:auto;font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--faint);border:1px solid var(--line);border-radius:5px;
+    padding:1px 5px;white-space:nowrap;}
+  .tile .tname{font-weight:700;font-size:14px;letter-spacing:-.01em;line-height:1.1;}
+  .tile .tdesc{font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.3;
+    max-height:26px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+  .tile .opct{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9px;
+    color:var(--amber);border:1px solid rgba(240,168,60,.35);border-radius:4px;padding:0 4px;margin:0;
+    white-space:nowrap;}
+  .tile .tmetrics{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-top:2px;}
+  .tile .tm{display:flex;flex-direction:column;gap:1px;}
+  .tile .tm .k{font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);}
+  .tile .tm .v{font-family:var(--mono);font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .tile .tm .v.sm{font-size:11.5px;font-weight:600;}
+  .tile .tspark{margin-top:auto;}
+  .tile .tspark svg{min-width:100%;}
+  .tile .tfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  /* ---- draggable tiles ---- */
+  .tile{cursor:default;}
+  .tile .thead{cursor:pointer;}                 /* click header to expand/collapse */
+  .tile .grip{display:inline-flex;align-items:center;justify-content:center;width:14px;height:16px;
+    margin-right:1px;flex:none;color:var(--faint);cursor:grab;opacity:.5;transition:opacity .12s,color .12s;
+    border-radius:4px;user-select:none;-webkit-user-select:none;touch-action:none;}
+  .tile .grip:hover{opacity:1;color:var(--muted);background:var(--surface-2);}
+  .tile .grip:active{cursor:grabbing;}
+  /* While dragging: the tile is lifted OUT of grid flow (position:fixed) so its on-screen
+     anchor never moves — only a placeholder slot is shuffled, and siblings FLIP around it.
+     This is what removes the jump/flicker of the old in-flow re-insert approach. */
+  .tile.dragging{position:fixed;margin:0;z-index:1000;pointer-events:none;
+    box-shadow:0 16px 40px rgba(0,0,0,.35);transition:none;}
+  .tile-placeholder{border:1px dashed var(--line);border-radius:12px;background:var(--surface-2);
+    opacity:.45;transition:none;}
+  .tilegrid.dragging-on{cursor:grabbing !important;}
+  .tilegrid.dragging-on .tile:not(.dragging){will-change:transform;}
+  @media(prefers-reduced-motion:reduce){.tile{transition:none;}}
+  .tile .tchev{color:var(--faint);font-size:13px;transition:transform .15s ease;}
+  .tile[aria-expanded="true"] .tchev{transform:rotate(90deg);}
+  .tile.detwrap{display:block;}
+  /* detail is an inset panel INSIDE the tile — never a full-width top border that
+     can be mistaken for the card edge. Subtle fill + rounded box makes containment obvious. */
+  .botdet{margin-top:10px;background:var(--surface-2);border:1px solid var(--line);
+    border-radius:9px;padding:11px 12px 12px;}
+  .winbar{height:2px;border-radius:2px;background:var(--line);margin:3px 0 0 auto;max-width:46px;overflow:hidden;}
   .winbar>i{display:block;height:100%;background:var(--teal);border-radius:2px;}
   .pos-row{font-variant-numeric:tabular-nums;}
   .pos-row .dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle;}
@@ -614,12 +635,6 @@ PAGE = r"""<!doctype html>
   .charttip .tt-row{display:flex;justify-content:space-between;gap:16px;margin:2px 0;color:var(--muted);}
   .charttip .tt-row b{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums;}
   .charttip .tt-status{margin-top:6px;padding-top:5px;border-top:1px solid var(--line);font-weight:700;}
-  .macroboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:9px;}
-  .macroboard .coin .c{font-size:13px;}
-  @media(max-width:520px){.macroboard{grid-template-columns:1fr 1fr;}}
-  .trendboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:9px;}
-  .trendboard .coin .c{font-size:13px;}
-  @media(max-width:520px){.trendboard{grid-template-columns:1fr;}}
   .pfcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
   .pfhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
   .pfhead .dep{font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;}
@@ -667,7 +682,11 @@ PAGE = r"""<!doctype html>
   .eqempty{font-family:var(--mono);font-size:13px;color:var(--faint);padding:34px 0;text-align:center;}
 
   .err{font-family:var(--mono);font-size:13px;color:var(--brick);padding:16px 0;}
-  @media(max-width:900px){.bots{grid-template-columns:1fr;}.board{grid-template-columns:repeat(3,1fr);}
+  /* narrow screens: shed the least-load-bearing columns (sparkline, trades, win)
+     rather than let the row wrap — balance and P&L are the two that must survive */
+  @media(max-width:900px){.board{grid-template-columns:repeat(3,1fr);}
+    .botcols{grid-template-columns:10px minmax(110px,2fr) 88px 92px 74px 12px;}
+    .botcols .c-spark,.botcols .c-trades,.botcols .c-win{display:none;}
     .totals{gap:22px;}.totals .big{font-size:21px;}}
   @media(max-width:520px){.board{grid-template-columns:repeat(2,1fr);}}
 </style></head>
@@ -782,18 +801,6 @@ PAGE = r"""<!doctype html>
   </div>
   <div class="board" id="board"></div>
 
-  <div class="brakehead" style="margin-top:26px">
-    <h2 class="sec">Macro brake · stocks / bonds / gold</h2>
-    <span class="label" id="macrosum"></span>
-  </div>
-  <div class="board macroboard" id="macroboard"></div>
-
-  <div class="brakehead" style="margin-top:26px">
-    <h2 class="sec">Trendline setups · Filters</h2>
-    <span class="label" id="trendsum"></span>
-  </div>
-  <div class="board trendboard" id="trendboard"></div>
-
   <div class="panelrow">
     <div>
       <h2 class="sec">Equity vs buy &amp; hold</h2>
@@ -802,6 +809,11 @@ PAGE = r"""<!doctype html>
           <span><i style="background:var(--amber)"></i>Braked Hold</span>
           <span><i style="background:#6BA5E0"></i>Spot</span>
           <span><i style="background:#A98BE0"></i>Futures</span>
+          <span><i style="background:#4ADE80"></i>S&amp;P 500</span>
+          <span><i style="background:#FF7AB6"></i>Nifty 50</span>
+          <span><i style="background:#FFB347"></i>ONGC</span>
+          <span><i style="background:#9ACD32"></i>ITC</span>
+          <span><i style="background:#F7931A"></i>BTC</span>
           <span><i style="background:var(--brick)"></i>BTC hold</span>
           <span><i style="background:var(--teal)"></i>Basket hold</span>
         </div>
@@ -812,10 +824,6 @@ PAGE = r"""<!doctype html>
     <div>
       <h2 class="sec">Brake memory · track record</h2>
       <div class="mem" id="memory"></div>
-    </div>
-    <div>
-      <h2 class="sec">Funding carry · yield</h2>
-      <div class="fund" id="funding"></div>
     </div>
   </div>
 
@@ -835,6 +843,19 @@ PAGE = r"""<!doctype html>
 const $=id=>document.getElementById(id);
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 document.documentElement.setAttribute("data-theme", localStorage.getItem("deskTheme")||"dark");
+
+// ---- stale-tab self-heal (no reload loop) ----
+// The server 307-redirects "/" to "/d/<build>/" so every deploy changes the URL a frozen
+// bfcache tab (running old JS that ignores no-store) lands on. This client check handles the
+// case where a tab is frozen at an OLD "/d/<oldbuild>/" path: it moves to the current build
+// path ONCE via location.replace (no reload loop). We record the build only AFTER confirming
+// we're on the right path, so we never reload/replace twice.
+const DASH_BUILD="__DASH_BUILD__";
+try{
+  const wantPath="/d/"+DASH_BUILD+"/";
+  if(location.pathname!==wantPath){ location.replace(wantPath); }
+  else { sessionStorage.setItem("dashBuild", DASH_BUILD); }
+}catch(e){ /* sessionStorage/location unavailable: skip guard */ }
 
 // ---- price chart (candles + volume + 200-day line + buy/sell markers) ----
 const CHART_ASSETS=[
@@ -1154,7 +1175,7 @@ $("themeToggle").onclick=()=>{
 };
 setTheme(localStorage.getItem("deskTheme")||"dark");
 switchChartView("trader");   // default to the ApeX-style Trader view (theme now set)
-const money=v=>"$"+(v>=1000?v.toLocaleString(undefined,{maximumFractionDigits:0}):v.toFixed(2));
+const money=(v,cur="USD")=>{const s=cur==="INR"?"₹":"$";return s+(v>=1000?v.toLocaleString(undefined,{maximumFractionDigits:0}):v.toFixed(2));};
 const pct=v=>(v>=0?"+":"")+v.toFixed(2)+"%";
 const cls=v=>v>0?"pos":v<0?"neg":"";
 const price=v=>v>=1000?"$"+v.toLocaleString(undefined,{maximumFractionDigits:0}):v>=1?"$"+v.toFixed(2):"$"+v.toFixed(3);
@@ -1180,6 +1201,239 @@ function spark(vals){
       stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 
+/* ---- BOT TABLE ----
+   Design brief: the Bots block is the glance surface of the desk — "is anything
+   red / dead / not trading?" answered without scrolling. So the default row
+   carries only the decision-grade fields (status, name, 30d shape, wallet, P&L,
+   trades, win rate) and everything that used to bloat the tile (open positions,
+   watchlist, full-size equity chart) moves behind a click. Fixes: 11 bots no
+   longer overflow the viewport, and the numbers line up column-wise so bots can
+   be compared against each other instead of read one card at a time. */
+const BOT_GROUPS=[
+  ["Crypto",     ["Spot","Futures","Braked Hold"]],
+  ["Short-term", ["Scalp","Day Trade"]],
+  ["Paper equity", ["S&P 500","Nifty 50","ONGC","ITC","BTC"]],
+];
+const botOpen=new Set();   // expanded rows, kept across the live re-render
+let _lastBots=[];          // so a toggle can repaint without waiting for /api/overview
+let _botsWired=false;
+
+// 60x18 row sparkline — shape only (is it grinding up or bleeding?); the full
+// 30-day chart with the last-value guide line still lives in the expand.
+function sparkmini(vals){
+  if(!vals||vals.length<2) return `<span class="nospark">—</span>`;
+  const w=60,h=18,pad=2, lo=Math.min(...vals), hi=Math.max(...vals), rng=(hi-lo)||1;
+  const pts=vals.map((v,i)=>((i/(vals.length-1))*w).toFixed(1)+","
+    +(pad+(h-2*pad)-((v-lo)/rng)*(h-2*pad)).toFixed(1)).join(" ");
+  const col=vals[vals.length-1]>=vals[0]?"var(--teal)":"var(--brick)";
+  return `<svg class="minispark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">`
+    +`<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.4"`
+    +` vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`;
+}
+
+function botDetail(b){
+  const opens=b.open.length?b.open.map(o=>
+    `<div class="pos-row"><span><i class="dot" style="background:${o.profit>=0?'var(--teal)':'var(--brick)'}"></i>${o.pair} <span class="tag ${o.dir.toLowerCase()}">${o.dir}</span></span>`
+    +`<span class="${cls(o.profit)}">${pct(o.profit)} <span class="p">·${money(o.stake)}</span></span></div>`).join("")
+    :`<div class="none">no open positions</div>`;
+  const openBases=new Set(b.open.map(o=>o.pair.split('/')[0]));
+  const watch=(b.watching&&b.watching.length)?
+    `<div class="watching">`
+    +b.watching.map(c=>`<span class="wc${openBases.has(c)?' on':''}">${c}${openBases.has(c)?' ●':''}</span>`).join('<span class="wsep">·</span>')
+    +`</div>`:`<div class="none" style="font-family:var(--mono);font-size:12px;color:var(--faint)">no whitelist reported</div>`;
+  return `<div class="botdet">
+      <div><span class="label">Open positions ${b.open.length?"("+b.open.length+")":""}</span>
+        <div class="opens">${opens}</div></div>
+      <div><span class="label">Watching ${b.watching?b.watching.length:0}</span>${watch}
+        <span class="label" style="margin-top:12px">30-day equity</span>${spark(b.equity)}</div>
+    </div>`;
+}
+
+function botRow(b,cat){
+  const sc=!b.online?"off":b.state==="running"?"run":"paused";
+  const stxt=!b.online?"offline":b.state;
+  const health=!b.online?"flat":b.profit_pct>0.001?"up":b.profit_pct<-0.001?"down":"flat";
+  const parrow=b.profit_pct>0.001?"▲ ":b.profit_pct<-0.001?"▼ ":"";
+  const wr=b.trades?Math.round(b.winrate):0;
+  const ex=botOpen.has(b.name);
+  const bal=b.has_balance?money(b.balance,b.currency||"USD"):"—";
+  // SQUARE TILE: basic info always visible; advanced (open positions + watchlist +
+  // 30d equity) shows when expanded via the existing botOpen toggle. Category tag
+  // replaces the old CRYPTO / SHORT-TERM / PAPER EQUITY section headers.
+  return `<div class="tile ${health}${b.online?" on":" "}${ex?" detwrap":""}" role="button" tabindex="0"
+      aria-expanded="${ex}" data-bot="${b.name}" title="${b.name} — click for open positions &amp; watchlist">
+      <div class="thead"><span class="grip" title="Drag to reorder" aria-hidden="true">⋮⋮</span><i class="sdot"></i><span class="tname">${b.name}</span><span class="tcat">${cat}</span></div>
+      <div class="tdesc">${b.desc}</div>
+      <div class="tmetrics">
+        <div class="tm"><span class="k">Wallet</span><span class="v">${bal}</span></div>
+        <div class="tm"><span class="k">Closed P&amp;L</span><span class="v ${cls(b.profit_pct)}">${parrow}${pct(b.profit_pct)}</span></div>
+        <div class="tm"><span class="k">Trades</span><span class="v sm">${b.trades}</span></div>
+        <div class="tm"><span class="k">Win</span><span class="v sm">${b.trades?wr+"%":"—"}</span></div>
+      </div>
+      <div class="tspark">${sparkmini(b.equity)}</div>
+      <div class="tfoot"><span class="state ${sc}"><i class="livedot"></i>${stxt}</span>${b.open.length?` <span class="opct">${b.open.length} open</span>`:""}<span class="tchev">›</span></div>
+      ${ex?botDetail(b):""}
+    </div>`;
+}
+
+function renderBots(bots){
+  _lastBots=bots;
+  // flatten all groups into one tile grid; tag each tile with its category instead
+  // of splitting into CRYPTO / SHORT-TERM / PAPER EQUITY section headers.
+  const catOf={};
+  BOT_GROUPS.forEach(([title,names])=>names.forEach(n=>catOf[n]=title));
+  bots.forEach(b=>{ if(!catOf[b.name]) catOf[b.name]="Other"; });
+
+  // apply persisted manual ordering (drag-reorder) on top of the incoming list
+  let ordered=bots.slice();
+  try{
+    const saved=JSON.parse(localStorage.getItem("botsOrder")||"null");
+    if(Array.isArray(saved) && saved.length){
+      const byName=new Map(bots.map(b=>[b.name,b]));
+      const seen=new Set();
+      const out=[];
+      saved.forEach(n=>{ if(byName.has(n) && !seen.has(n)){ out.push(byName.get(n)); seen.add(n); } });
+      bots.forEach(b=>{ if(!seen.has(b.name)) out.push(b); });   // append any new bots
+      ordered=out;
+    }
+  }catch(e){ /* bad stored order: ignore */ }
+
+  const bal=ordered.reduce((s,b)=>s+(b.has_balance?b.balance:0),0);
+  const live=ordered.filter(b=>b.online).length;
+
+  // Flat layout: no section holder — each tile is a direct child of #bots so it
+  // expands independently (CSS grid align-items:start keeps row-mates from stretching).
+  $("bots").innerHTML=`<div class="botgrphd"><span class="label">BOTS</span>`+
+    `<span class="gsum">${live}/${ordered.length} live · ${money(bal)}</span></div>`+
+    `<div class="tilegrid">${ordered.map(b=>botRow(b,catOf[b.name])).join("")}</div>`;
+
+  if(!_botsWired){          // delegated once — innerHTML is replaced on every tick
+    const host=$("bots");
+    const toggle=el=>{const n=el.dataset.bot; botOpen.has(n)?botOpen.delete(n):botOpen.add(n); renderBots(_lastBots);};
+    host.addEventListener("click",e=>{
+      const r=e.target.closest(".tile"); if(!r) return;
+      if(e.target.closest(".grip")) return;        // grip is for dragging, not toggling
+      toggle(r);
+    });
+    host.addEventListener("keydown",e=>{
+      if(e.key!=="Enter"&&e.key!==" ") return;
+      const r=e.target.closest(".tile"); if(!r) return;
+      e.preventDefault(); toggle(r);
+    });
+    initDrag(host);
+    _botsWired=true;
+  }
+}
+
+// ---- drag-to-reorder with FLIP animation (smooth, no libs) ----
+// Approach: on pointerdown the dragged tile is lifted out of grid flow (position:fixed)
+// and a same-size placeholder takes its slot. During the move we only shuffle the PLACEHOLDER
+// between siblings; siblings FLIP (animate) to their new slots while the dragged tile follows
+// the cursor. Because the dragged tile is never re-inserted, it cannot jump -> no flicker.
+let _drag=null;
+function initDrag(host){
+  host.addEventListener("pointerdown",e=>{
+    const grip=e.target.closest(".grip"); if(!grip) return;
+    const tile=grip.closest(".tile"); if(!tile) return;
+    e.preventDefault();
+    const grid=host.querySelector(".tilegrid");
+
+    // snapshot the tile's position/size, then lift it out of flow
+    const rect=tile.getBoundingClientRect();
+    const ph=document.createElement("div");
+    ph.className="tile-placeholder";
+    ph.style.width=rect.width+"px"; ph.style.height=rect.height+"px";
+    tile.parentNode.insertBefore(ph, tile);
+
+    tile.classList.add("dragging");
+    tile.style.width=rect.width+"px";
+    tile.style.height=rect.height+"px";
+    tile.style.left=rect.left+"px";
+    tile.style.top=rect.top+"px";
+    grid.classList.add("dragging-on");
+
+    _drag={tile,grid,ph,offX:e.clientX-rect.left,offY:e.clientY-rect.top,
+           startX:e.clientX,startY:e.clientY,moved:false,lastOver:ph};
+
+    tile.setPointerCapture(e.pointerId);
+    host.addEventListener("pointermove",onDragMove);
+    host.addEventListener("pointerup",onDragEnd);
+    host.addEventListener("pointercancel",onDragEnd);
+  });
+}
+function onDragMove(e){
+  if(!_drag) return;
+  const {tile,grid,ph,offX,offY}=_drag;
+  _drag.moved=true;
+  // the tile simply follows the cursor (fixed positioning, no layout anchor to jump)
+  tile.style.left=(e.clientX-offX)+"px";
+  tile.style.top =(e.clientY-offY)+"px";
+
+  // figure out which real tile we're hovering (ignore the fixed tile + placeholder)
+  tile.style.pointerEvents="none";
+  const el=document.elementFromPoint(e.clientX,e.clientY);
+  tile.style.pointerEvents="";
+  const over=el&&el.closest&&el.closest(".tile");
+  if(over && over!==tile && over!==ph){
+    const r=over.getBoundingClientRect();
+    const after=(e.clientY-r.top)>r.height/2 || (e.clientX-r.left)>r.width/2;
+    const target=after?over.nextSibling:over;
+    if(ph!==target){
+      // FLIP: record current sibling positions, move placeholder, then animate siblings
+      const sibs=[...grid.querySelectorAll(".tile")].filter(t=>t!==tile);
+      const first=new Map(sibs.map(t=>[t,t.getBoundingClientRect()]));
+      if(after) over.after(ph); else over.before(ph);
+      sibs.forEach(t=>{
+        const f=first.get(t), l=t.getBoundingClientRect();
+        const ddx=f.left-l.left, ddy=f.top-l.top;
+        if(ddx||ddy){
+          t.style.transition="none";
+          t.style.transform=`translate(${ddx}px,${ddy}px)`;
+          requestAnimationFrame(()=>{
+            t.style.transition="transform .18s cubic-bezier(.2,.7,.3,1)";
+            t.style.transform="";
+          });
+        }
+      });
+      _drag.lastOver=over;
+    }
+  }
+}
+function onDragEnd(e){
+  if(!_drag) return;
+  const {tile,grid,ph,moved}=_drag;
+  const host=grid.closest("#bots")||document;
+  host.removeEventListener("pointermove",onDragMove);
+  host.removeEventListener("pointerup",onDragEnd);
+  host.removeEventListener("pointercancel",onDragEnd);
+
+  // settle the dragged tile into the placeholder's slot (smooth) then normalize
+  const pr=ph.getBoundingClientRect();
+  const tr=tile.getBoundingClientRect();
+  tile.style.transition="none";
+  tile.style.transform=`translate(${pr.left-tr.left}px,${pr.top-tr.top}px)`;
+  requestAnimationFrame(()=>{
+    tile.style.transition="left .18s cubic-bezier(.2,.7,.3,1),top .18s cubic-bezier(.2,.7,.3,1)";
+    tile.style.left=pr.left+"px"; tile.style.top=pr.top+"px"; tile.style.transform="";
+  });
+  const finish=()=>{
+    if(finish.done) return; finish.done=true;
+    tile.classList.remove("dragging");
+    tile.style.cssText="";               // drop fixed/width/height/left/top
+    if(ph.parentNode) ph.parentNode.replaceChild(tile, ph);
+    grid.classList.remove("dragging-on");
+    [...grid.querySelectorAll(".tile")].forEach(t=>{ t.style.transition=""; t.style.transform=""; t.style.willChange=""; });
+    if(moved) saveOrder(grid);
+  };
+  tile.addEventListener("transitionend", finish, {once:true});
+  setTimeout(finish, 260);               // fallback if transitionend doesn't fire
+  _drag=null;
+}
+function saveOrder(grid){
+  const order=[...grid.querySelectorAll(".tile")].map(t=>t.dataset.bot);
+  try{ localStorage.setItem("botsOrder",JSON.stringify(order)); }catch(e){}
+}
+
 function drawEquityChart(hist){
   const cv=document.getElementById("eqchart"), empty=document.getElementById("eqempty");
   if(!hist || hist.length<2){
@@ -1195,6 +1449,12 @@ function drawEquityChart(hist){
     {k:"brakedhold",color:css("--amber"),lw:2.4,dash:[]},
     {k:"spot",color:"#6BA5E0",lw:1.5,dash:[]},
     {k:"futures",color:"#A98BE0",lw:1.5,dash:[]},
+    // apex series removed 2026-07-23 (bot retired; see BOTS list)
+    {k:"spx",color:"#4ADE80",lw:1.5,dash:[]},
+    {k:"nifty",color:"#FF7AB6",lw:1.5,dash:[]},
+    {k:"ongc",color:"#FFB347",lw:1.5,dash:[]},
+    {k:"itc",color:"#9ACD32",lw:1.5,dash:[]},
+    {k:"btc",color:"#F7931A",lw:1.5,dash:[]},
     {k:"btc_hold",color:css("--brick"),lw:1.5,dash:[5,4]},
     {k:"basket_hold",color:css("--teal"),lw:1.5,dash:[5,4]},
   ];
@@ -1244,33 +1504,7 @@ async function tick(){
       +`<span style="color:var(--muted)">peak equity ${money(d.guardian.peak)}</span>`;
 
     // bots
-    $("bots").innerHTML=d.bots.map(b=>{
-      const sc=!b.online?"off":b.state==="running"?"run":"paused";
-      const stxt=!b.online?"offline":b.state;
-      const health=!b.online?"":(b.profit_pct>0.001?"up":b.profit_pct<-0.001?"down":"flat");
-      const parrow=b.profit_pct>0.001?"▲ ":b.profit_pct<-0.001?"▼ ":"";
-      const wr=b.trades?Math.round(b.winrate):0;
-      const opens=b.open.length?b.open.map(o=>
-        `<div class="pos-row"><span><i class="dot" style="background:${o.profit>=0?'var(--teal)':'var(--brick)'}"></i>${o.pair} <span class="tag ${o.dir.toLowerCase()}">${o.dir}</span></span>`
-        +`<span class="${cls(o.profit)}">${pct(o.profit)} <span class="p">·${money(o.stake)}</span></span></div>`).join("")
-        :`<div class="none">no open positions</div>`;
-      const openBases=new Set(b.open.map(o=>o.pair.split('/')[0]));
-      const watch=(b.watching&&b.watching.length)?
-        `<div class="watching"><span class="wl">Watching ${b.watching.length}</span>`
-        +b.watching.map(c=>`<span class="wc${openBases.has(c)?' on':''}">${c}${openBases.has(c)?' ●':''}</span>`).join('<span class="wsep">·</span>')
-        +`</div>`:"";
-      return `<div class="bot ${health}"><div class="top">
-          <div><div class="nm">${b.name}</div><div class="ds">${b.desc}</div></div>
-          <span class="state ${sc}"><i class="livedot"></i>${stxt}</span></div>
-        <div class="grid2">
-          <div class="metric"><span class="label">Wallet</span><span class="v">${money(b.balance)}</span></div>
-          <div class="metric"><span class="label">Closed P&L</span><span class="v ${cls(b.profit_pct)}">${parrow}${pct(b.profit_pct)}</span></div>
-          <div class="metric"><span class="label">Trades</span><span class="v">${b.trades}</span></div>
-          <div class="metric"><span class="label">Win rate</span><span class="v">${b.trades?wr+"%":"—"}</span>${b.trades?`<div class="winbar"><i style="width:${Math.min(100,wr)}%"></i></div>`:""}</div>
-        </div>
-        <div class="sparkwrap"><span class="label">30-day equity</span>${spark(b.equity)}</div>
-        <div class="opens">${opens}</div>${watch}</div>`;
-    }).join("");
+    renderBots(d.bots);
 
     // brake board
     $("brakesum").textContent=d.brake_total?`${d.brake_hold} holding · ${d.brake_total-d.brake_hold} in cash`:"";
@@ -1282,16 +1516,6 @@ async function tick(){
         <div class="g" style="color:var(--faint)">${price(c.price)}</div></div>`;
     }).join(""):`<div class="none mono" style="color:var(--faint)">brake state not yet cached — the hourly job populates it</div>`;
 
-    // macro brake board
-    const macro=d.macro||[];
-    $("macrosum").textContent=macro.length?`${macro.filter(x=>x.state==="above").length} holding · ${macro.filter(x=>x.state!=="above").length} in cash`:"";
-    $("macroboard").innerHTML=macro.length?macro.map(c=>{
-      const hold=c.state==="above";
-      return `<div class="coin ${hold?"hold":"cash"}">
-        <div class="c"><i class="s" style="background:${hold?"var(--teal)":"var(--brick)"}"></i>${c.name}</div>
-        <div class="g ${hold?"pos":"neg"}">${hold?"HOLD":"CASH"} ${(c.gap>=0?"+":"")+c.gap.toFixed(0)}%</div></div>`;
-    }).join(""):`<div class="none mono" style="color:var(--faint)">macro state not yet cached — the 6h job populates it</div>`;
-
     // shared "frozen" badge: these panels read CACHED board files, so when the
     // generating job is paused (2026-07-20 simplification) the panel is truly stale.
     const fbadge=(iso)=>{
@@ -1300,28 +1524,6 @@ async function tick(){
       return `<div class="mono" style="font-size:11px;color:var(--amber);`
         +`border:1px solid rgba(240,168,60,.35);border-radius:6px;padding:4px 8px;margin-bottom:8px">`
         +`⏸ FROZEN — auto-monitor paused${w}. For a live reading use Telegram /trend · /portfolio</div>`;};
-
-    // trendline board (Tori's valid-line filters)
-    const tb=(d.trend&&d.trend.coins)||[];
-    const setups=tb.filter(c=>c.signal);
-    const meta={BOUNCE_LONG:["🟢","bounce","var(--teal)","pos"],
-                BREAK_UP:["🚀","breakout","var(--teal)","pos"],
-                BREAK_DOWN:["🔴","breakdown","var(--brick)","neg"],
-                REJECT_SHORT:["⚠️","rejected","var(--amber)","neg"]};
-    $("trendsum").textContent=tb.length?`${setups.length} setup${setups.length===1?"":"s"} · ${tb.length-setups.length} inside channel`:"";
-    const tfrozen=(d.trend&&d.trend._paused)?fbadge(d.trend.updated):"";
-    $("trendboard").innerHTML=tfrozen+(tb.length?tb.map(c=>{
-      if(!c.signal){
-        return `<div class="coin" style="opacity:.55">
-          <div class="c"><i class="s" style="background:var(--faint)"></i>${c.coin}</div>
-          <div class="g" style="color:var(--faint)">inside channel</div>
-          <div class="g" style="color:var(--faint)">${price(c.close)}</div></div>`;}
-      const mt=meta[c.signal]||["•","",'var(--faint)',""];
-      return `<div class="coin" style="border-left:3px solid ${mt[2]}">
-        <div class="c"><i class="s" style="background:${mt[2]}"></i>${c.coin} <span style="color:var(--faint);font-weight:600">${mt[0]} ${mt[1]}</span></div>
-        <div class="g ${mt[3]}">${price(c.entry)} → ${price(c.target)} <span style="color:var(--faint)">(${c.rr}R)</span></div>
-        <div class="g" style="color:var(--faint)">stop ${price(c.stop)} · ${c.touches} touches</div></div>`;
-    }).join(""):`<div class="none mono" style="color:var(--faint)">trendline board not yet cached — the 4h job populates it</div>`);
 
     // diversified braked portfolio map — India (tradeable) + US (reference)
     const pf=d.portfolio||{};
@@ -1395,22 +1597,6 @@ async function tick(){
       $("memory").innerHTML=`<span class="none">memory not available</span>`;
     }
 
-    // funding carry
-    const f=d.funding;
-    if(f){
-      const vc=f.verdict.toLowerCase();
-      const hint=f.verdict==="STRONG"?"Attractive — market-neutral yield worth considering."
-        :f.verdict==="MODEST"?"Middling — only worth it with idle capital."
-        :"Not worth deploying — carry is compressed right now.";
-      $("funding").innerHTML=
-        `<span class="verdict ${vc}">${f.verdict}</span>`
-        +`<div class="fm"><span class="label">Gross carry</span><span class="v">${f.gross.toFixed(1)}%</span></div>`
-        +`<div class="fm"><span class="label">Net (after costs)</span><span class="v ${f.net>0?'pos':''}">${f.net.toFixed(1)}%</span></div>`
-        +`<div class="fm"><span class="label">As of</span><span class="v" style="font-size:13px">${f.when}</span></div>`
-        +`<span class="hint">${hint} Checked daily 9am.</span>`;
-    } else {
-      $("funding").innerHTML=`<span class="none mono" style="color:var(--faint)">no funding reading yet — the daily 9am job populates it</span>`;
-    }
   }catch(e){
     $("err").hidden=false; $("err").textContent="⚠️ can't reach the desk API: "+e.message;
     $("upd").textContent="disconnected"; $("livedot").style.background="var(--brick)";

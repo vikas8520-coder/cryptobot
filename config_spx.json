@@ -1,0 +1,58 @@
+{
+    "max_open_trades": 1,
+    "stake_currency": "USD",
+    "stake_amount": 200,
+    "tradable_balance_ratio": 0.99,
+    "fiat_display_currency": "USD",
+    "dry_run": true,
+    "dry_run_wallet": 1000,
+    "cancel_open_orders_on_exit": false,
+    "trading_mode": "spot",
+    "timeframe": "1h",
+    "fee": 0.0005,
+    "synthetic": false,
+    "feed_refresh_secs": 300,
+    "spx_strategy": {
+        "pair": "SPY/USD",
+        "interval": "1h",
+        "lookback_bars": 60,
+        "fast": 10,
+        "slow": 30,
+        "stale_secs": 5400,
+        "max_hold_cycles": 72,
+        "dma_filter": 200
+    },
+    "exchange": {
+        "name": "spx",
+        "pair_whitelist": [
+            "SPY/USD"
+        ],
+        "pair_blacklist": []
+    },
+    "pairlists": [
+        {
+            "method": "StaticPairList"
+        }
+    ],
+    "api_server": {
+        "enabled": true,
+        "listen_ip_address": "127.0.0.1",
+        "listen_port": 8086,
+        "verbosity": "error",
+        "CORS_origins": [],
+        "username": "freqtrader"
+    },
+    "bot_name": "cryptobot-spx",
+    "initial_state": "running",
+    "force_entry_enable": false,
+    "internals": {
+        "process_throttle_secs": 5
+    },
+    "add_config_files": [
+        "config_spx.secret.json"
+    ],
+    "stoploss": -0.05,
+    "trailing_stop": true,
+    "trailing_stop_positive": 0.02,
+    "trailing_stop_positive_offset": 0.03
+}

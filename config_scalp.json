@@ -1,6 +1,8 @@
 {
     "$schema": "https://schema.freqtrade.io/schema.json",
-    "max_open_trades": 3,
+    "max_open_trades": 1,
+    "stoploss": -0.02,
+    "trailing_stop": false,
     "stake_currency": "USDT",
     "stake_amount": 100,
     "tradable_balance_ratio": 0.99,
@@ -20,8 +22,9 @@
     "order_types": {
         "entry": "market",
         "exit": "market",
-        "stoploss": "market",
-        "stoploss_on_exchange": false
+        "stoploss": "limit",
+        "stoploss_on_exchange": true,
+        "stoploss_on_exchange_interval": 60
     },
     "entry_pricing": {
         "price_side": "other",

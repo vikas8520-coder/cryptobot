@@ -38,3 +38,14 @@ activity_feed.jsonl
 *_history.csv
 risk_backtest_equity.csv
 *_board.json
+
+# --- ApeX (key/secret/passphrase from on-chain registration) ---
+apex_creds.json
+
+# weekly keep/kill scorecard (append-only runtime; script is source of truth)
+paper_scorecard.csv
+paper_scorecard.out
+paper_scorecard.err
+
+# --- Diversified-brake runtime queue (regenerated each run) ---
+diversified_brake_pending.json

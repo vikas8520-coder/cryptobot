@@ -1,0 +1,143 @@
+{
+  "generated_from": [
+    "NIFTYBEES_daily.csv",
+    "NIFTYBEES_hourly.csv"
+  ],
+  "stoploss": -0.05,
+  "fee_low_side": 0.0005,
+  "fee_hi_side": 0.0006,
+  "results": [
+    {
+      "total_return_pct": 769.09,
+      "cagr_pct": 13.11,
+      "max_drawdown_pct": -36.34,
+      "trades": 1,
+      "win_rate_pct": 100.0,
+      "profit_factor": "inf",
+      "sharpe": 0.79,
+      "avg_hold_bars": 4328.0,
+      "time_in_market_pct": 100.0,
+      "variant": "B&H NIFTYBEES (daily, full)"
+    },
+    {
+      "total_return_pct": -2.71,
+      "cagr_pct": -2.72,
+      "max_drawdown_pct": -14.82,
+      "trades": 1,
+      "win_rate_pct": 0.0,
+      "profit_factor": 0.0,
+      "sharpe": -0.16,
+      "avg_hold_bars": 246.0,
+      "time_in_market_pct": 99.2,
+      "variant": "B&H NIFTYBEES (last 1y)"
+    },
+    {
+      "total_return_pct": -1.07,
+      "cagr_pct": -1.07,
+      "max_drawdown_pct": -1.11,
+      "trades": 16,
+      "win_rate_pct": 43.8,
+      "profit_factor": 0.5,
+      "sharpe": -0.86,
+      "avg_hold_bars": 1.0,
+      "time_in_market_pct": 0.9,
+      "variant": "V1 CURRENT hourly 10/30 +brake +stop +1-bar timeout (5bps)"
+    },
+    {
+      "total_return_pct": -1.38,
+      "cagr_pct": -1.39,
+      "max_drawdown_pct": -1.4,
+      "trades": 16,
+      "win_rate_pct": 25.0,
+      "profit_factor": 0.41,
+      "sharpe": -1.1,
+      "avg_hold_bars": 1.0,
+      "time_in_market_pct": 0.9,
+      "variant": "V1 CURRENT (12bps RT)"
+    },
+    {
+      "total_return_pct": 0.68,
+      "cagr_pct": 0.68,
+      "max_drawdown_pct": -7.91,
+      "trades": 16,
+      "win_rate_pct": 43.8,
+      "profit_factor": 1.1,
+      "sharpe": 0.17,
+      "avg_hold_bars": 33.2,
+      "time_in_market_pct": 31.2,
+      "variant": "V2 hourly 10/30 +brake +stop, NO timeout (5bps)"
+    },
+    {
+      "total_return_pct": 0.36,
+      "cagr_pct": 0.36,
+      "max_drawdown_pct": -8.1,
+      "trades": 16,
+      "win_rate_pct": 43.8,
+      "profit_factor": 1.06,
+      "sharpe": 0.1,
+      "avg_hold_bars": 33.2,
+      "time_in_market_pct": 31.2,
+      "variant": "V2 NO timeout (12bps RT)"
+    },
+    {
+      "total_return_pct": 23.08,
+      "cagr_pct": 1.19,
+      "max_drawdown_pct": -38.5,
+      "trades": 79,
+      "win_rate_pct": 29.1,
+      "profit_factor": 1.35,
+      "sharpe": 0.16,
+      "avg_hold_bars": 29.1,
+      "time_in_market_pct": 53.2,
+      "variant": "V3 daily 200DMA braked-hold +5% stop (5bps)"
+    },
+    {
+      "total_return_pct": 21.15,
+      "cagr_pct": 1.1,
+      "max_drawdown_pct": -39.07,
+      "trades": 79,
+      "win_rate_pct": 29.1,
+      "profit_factor": 1.33,
+      "sharpe": 0.15,
+      "avg_hold_bars": 29.1,
+      "time_in_market_pct": 53.2,
+      "variant": "V3 (12bps RT)"
+    },
+    {
+      "total_return_pct": 170.03,
+      "cagr_pct": 5.82,
+      "max_drawdown_pct": -23.0,
+      "trades": 79,
+      "win_rate_pct": 32.9,
+      "profit_factor": 2.63,
+      "sharpe": 0.54,
+      "avg_hold_bars": 37.5,
+      "time_in_market_pct": 68.5,
+      "variant": "V3-nostop daily 200DMA braked-hold, NO stop (5bps)"
+    },
+    {
+      "total_return_pct": 7.92,
+      "cagr_pct": 0.44,
+      "max_drawdown_pct": -32.84,
+      "trades": 26,
+      "win_rate_pct": 26.9,
+      "profit_factor": 1.22,
+      "sharpe": 0.1,
+      "avg_hold_bars": 56.1,
+      "time_in_market_pct": 33.7,
+      "variant": "V4a daily 20/50 cross +brake +stop (5bps)"
+    },
+    {
+      "total_return_pct": 12.27,
+      "cagr_pct": 0.66,
+      "max_drawdown_pct": -24.73,
+      "trades": 11,
+      "win_rate_pct": 27.3,
+      "profit_factor": 1.47,
+      "sharpe": 0.13,
+      "avg_hold_bars": 149.6,
+      "time_in_market_pct": 38.0,
+      "variant": "V4b daily 50/200 golden cross +stop (5bps)"
+    }
+  ]
+}

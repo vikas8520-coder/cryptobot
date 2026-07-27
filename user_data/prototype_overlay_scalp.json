@@ -1,0 +1,6 @@
+{
+    "_comment": "PROTOTYPE overlay for ScalpVwap1hRedesign backtests. Freeze-safe: config_scalp.json is never edited; this is layered on top via a second -c so the ATR custom_stoploss is the binding stop instead of config_scalp's fixed -0.02 (the very thing the redesign removes).",
+    "stoploss": -0.99,
+    "trailing_stop": false,
+    "timeframe": "1h"
+}

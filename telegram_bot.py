@@ -24,8 +24,18 @@ TOK = tg_token(API)
 PYBIN = "/Users/vikasreddy/cryptobot/.venv/bin/python3"
 MONITOR = "/Users/vikasreddy/cryptobot/funding_monitor.py"
 
-BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081))]
-BOTS_BY_NAME = {"spot": (8080, api_pw(8080)), "futures": (8081, api_pw(8081))}
+BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081)),
+        ("ApeX", 8085, api_pw(8085)), ("S&P 500", 8086, api_pw(8086)),
+        ("Nifty 50", 8087, api_pw(8087)),
+        ("ONGC", 8088, api_pw(8088)), ("ITC", 8089, api_pw(8089)),
+        ("BTC", 8091, api_pw(8091))]   # 8091, NOT 8090 — 8090 is the dashboard
+BOTS_BY_NAME = {"spot": (8080, api_pw(8080)), "futures": (8081, api_pw(8081)),
+                "apex": (8085, api_pw(8085)), "spx": (8086, api_pw(8086)),
+                "nifty": (8087, api_pw(8087)), "ongc": (8088, api_pw(8088)),
+                "itc": (8089, api_pw(8089)), "btc": (8091, api_pw(8091))}
+# The help/menu strings below list these names verbatim; a bot added here and NOT there is
+# a bot the user can never reach from Telegram.
+BOT_NAMES = "|".join(BOTS_BY_NAME)
 
 
 def redact(s):
@@ -161,8 +171,10 @@ def cmd_portfolio(args):
         m = d.build_map()
         if not m:
             return "❌ Not enough data right now — try again shortly."
+        # audit 2026-07-23: use the current job label (renamed from divbrake on
+        # 07-20) so the note self-clears while diversified_brake is active.
         return d.portfolio_text(m) + _paused_note(
-            "divbrake", "diversified_brake_board.json", "map",
+            "diversified_brake", "diversified_brake_board.json", "map",
             "you're no longer auto-pinged when the allocation changes")
     except Exception as e:
         return f"❌ portfolio error: {type(e).__name__}: {e}"
@@ -259,10 +271,10 @@ def cmd_macro(args):
 def _resolve_bot(args):
     """Return (name, port, pw) from first arg, or None + error string."""
     if not args:
-        return None, "Which bot? Use `spot` or `futures`."
+        return None, f"Which bot? Use `{'`, `'.join(BOTS_BY_NAME)}`."
     name = args[0].lower()
     if name not in BOTS_BY_NAME:
-        return None, f"Unknown bot '{args[0]}'. Use `spot` or `futures`."
+        return None, f"Unknown bot '{args[0]}'. Use `{'`, `'.join(BOTS_BY_NAME)}`."
     port, pw = BOTS_BY_NAME[name]
     return (name, port, pw), None
 
@@ -270,7 +282,7 @@ def _resolve_bot(args):
 def cmd_close(args):
     bot, err = _resolve_bot(args)
     if err:
-        return "❌ " + err + "\nUsage: /close <spot|futures> <trade_id|all>"
+        return "❌ " + err + "\nUsage: /close <spot|futures|apex> <trade_id|all>"
     name, port, pw = bot
     if len(args) < 2:
         return "❌ Which trade? Usage: /close " + name + " <trade_id|all>"
@@ -286,7 +298,7 @@ def cmd_close(args):
 def cmd_pause(args):
     bot, err = _resolve_bot(args)
     if err:
-        return "❌ " + err + "\nUsage: /pause <spot|futures>"
+        return "❌ " + err + "\nUsage: /pause <spot|futures|apex>"
     name, port, pw = bot
     r = api_post(port, pw, "stopentry")
     # never claim success on a failed call (audit: /pause lied when the bot was down)
@@ -300,7 +312,7 @@ def cmd_pause(args):
 def cmd_resume(args):
     bot, err = _resolve_bot(args)
     if err:
-        return "❌ " + err + "\nUsage: /resume <spot|futures>"
+        return "❌ " + err + "\nUsage: /resume <spot|futures|apex>"
     name, port, pw = bot
     r = api_post(port, pw, "reload_config")
     if not isinstance(r, dict) or r.get("error"):
@@ -336,9 +348,9 @@ HELP = ("🤖 TraderJoy commands:\n"
         "/memory – the brake's track record (holds & outcomes)\n"
         "/summary – everything at once\n"
         "— control —\n"
-        "/pause <spot|futures> – stop opening new trades\n"
-        "/resume <spot|futures> – re-enable new trades\n"
-        "/close <spot|futures> <id|all> – exit a trade now\n"
+        f"/pause <{BOT_NAMES}> – stop opening new trades\n"
+        f"/resume <{BOT_NAMES}> – re-enable new trades\n"
+        f"/close <{BOT_NAMES}> <id|all> – exit a trade now\n"
         "/reset – clear the circuit breaker & resume\n"
         "/help – this list")
 
@@ -364,9 +376,9 @@ MENU = [
     ("memory", "brake track record (holds & outcomes)"),
     ("carry", "funding-carry status"),
     ("summary", "everything at once"),
-    ("pause", "stop new trades — add spot|futures"),
-    ("resume", "re-enable new trades — add spot|futures"),
-    ("close", "exit a trade — add spot|futures id|all"),
+    ("pause", f"stop new trades — add {BOT_NAMES}"),
+    ("resume", f"re-enable new trades — add {BOT_NAMES}"),
+    ("close", f"exit a trade — add {BOT_NAMES} id|all"),
     ("reset", "clear the circuit breaker & resume"),
     ("help", "list all commands"),
 ]

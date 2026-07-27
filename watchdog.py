@@ -40,7 +40,12 @@ CHAT, API = telegram_conf(CONF)
 # tradenotifier stays retired (its fills surface in the activity feed instead).
 BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081)),
         ("Braked Hold", 8082, api_pw(8082)),
-        ("Scalp", 8083, api_pw(8083)), ("Day Trade", 8084, api_pw(8084))]
+        ("Scalp", 8083, api_pw(8083)), ("Day Trade", 8084, api_pw(8084)),
+        ("ApeX", 8085, api_pw(8085)),
+        ("S&P 500", 8086, api_pw(8086)),
+        ("Nifty 50", 8087, api_pw(8087)),
+        ("ONGC", 8088, api_pw(8088)), ("ITC", 8089, api_pw(8089)),
+        ("BTC", 8091, api_pw(8091))]   # 8091, NOT 8090 — 8090 is DASHBOARD below
 DASHBOARD = "http://127.0.0.1:8090/"
 DAEMONS = ["com.vikas.guardian", "com.vikas.traderjoy"]
 BRAKE_STALE_H = 12         # brake signal is daily; only flag if the job is truly dead

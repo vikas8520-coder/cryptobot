@@ -36,6 +36,8 @@ class ScalpVwap5m(IStrategy):
     # so a stalled fade flattens within ~6h instead of drifting overnight.
     minimal_roi = {"0": 0.02, "180": 0.005, "360": 0.0}
     stoploss = -0.02                 # fixed backstop (~1-1.5x typical 5m ATR on majors)
+    # audit 2026-07-23: config_scalp had been patched to -0.05 + trailing; that
+    # forced scalp losers to bleed past the 2% thesis stop. Config restored to -0.02.
     trailing_stop = False
 
     process_only_new_candles = True
