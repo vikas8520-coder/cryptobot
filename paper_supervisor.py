@@ -22,13 +22,16 @@ import urllib.error
 import datetime
 import os
 
+from local_secrets import api_pw
+
 # ---- CONFIG: each bot = (label, port, password, seed_balance_for_drift_check) ----
+# Passwords come from git-ignored local_secrets (never commit them — CLAUDE.md safety).
 BOTS = [
-    ("SPX",    8086, "pass8086", 1000.0),
-    ("NIFTY",  8087, "pass8087", 48278.0),
-    ("ONGC",    8088, "pass8088", 48278.0),
-    ("ITC",     8089, "pass8089", 48278.0),
-    ("BTC",     8091, "pass8091", 500.0),   # 8090 is the dashboard, not a bot shim
+    ("SPX",    8086, api_pw(8086), 1000.0),
+    ("NIFTY",  8087, api_pw(8087), 48278.0),
+    ("ONGC",    8088, api_pw(8088), 48278.0),
+    ("ITC",     8089, api_pw(8089), 48278.0),
+    ("BTC",     8091, api_pw(8091), 500.0),   # 8090 is the dashboard, not a bot shim
 ]
 BLOBS = "/Users/vikasreddy/cryptobot/paper_supervisor.log"   # git-ignored (runtime state)
 LOG_KEEP = 500                                          # lines of history to retain
