@@ -21,6 +21,7 @@ Audit-compliant: atomic state, verified sends, run lock, queue-before-commit.
 import csv
 import io
 import os
+import sys
 from datetime import datetime, timezone
 
 import brake_alerts as ba
@@ -181,9 +182,11 @@ def log_history(m):
 
 
 def main():
-    lock = acquire_lock("diversified_brake")
+    lock = acquire_lock("diversified_brake", base=BASE)
 
-    state = load_json(STATE, {})
+    # strict: a corrupt signature file must not read as a first run (which re-baselines
+    # the whole map silently and swallows the allocation change it should have alerted)
+    state = load_json(STATE, {}, strict=True)
     first_run = not state
     m = build_map()
     if m is None:
@@ -200,22 +203,27 @@ def main():
 
     # crash-safe: queue the alert BEFORE committing state (at-least-once delivery)
     if not first_run and changed:
-        pending = load_json(PENDING, [])
+        pending = load_json(PENDING, [], strict=True)
         pending.append({"text": portfolio_text(
             m, header=f"🧭 DIVERSIFIED BRAKE — allocation {change_text(old_sig, m)}")})
-        save_json(PENDING, pending)
+        if not save_json(PENDING, pending):
+            # don't commit the new signature while the alert never reached the queue
+            print("FATAL: could not queue allocation alert — state left uncommitted", flush=True)
+            sys.exit(1)
 
-    save_json(STATE, {"signature": sig, "ts": m["ts"]})
+    if not save_json(STATE, {"signature": sig, "ts": m["ts"]}):
+        print("signature commit FAILED — change re-detected next run", flush=True)
 
     if first_run:
         send(portfolio_text(m, header="🧭 DIVERSIFIED BRAKE — now tracking India + US. Map:"))
         print("baseline established", flush=True)
         return
 
-    pending = load_json(PENDING, [])
+    pending = load_json(PENDING, [], strict=True)
     remaining = [x for x in pending if not send(x["text"])]
     if remaining != pending:
-        save_json(PENDING, remaining)
+        if not save_json(PENDING, remaining):
+            print("queue rewrite FAILED — delivered alert(s) may be re-sent next run", flush=True)
     if remaining:
         print(f"{len(remaining)} alert(s) undelivered — retry next run", flush=True)
     elif pending:

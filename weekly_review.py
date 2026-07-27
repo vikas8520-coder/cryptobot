@@ -45,7 +45,10 @@ def read_equity():
         return []
     try:
         return list(csv.DictReader(open(EQUITY)))
-    except Exception:
+    except Exception as e:
+        # don't silently pretend "no history" — an unreadable CSV would flip the
+        # signal gate to "still gathering data" and hide that the file is broken
+        print(f"read_equity: {os.path.basename(EQUITY)} unreadable ({e})", flush=True)
         return []
 
 
@@ -90,8 +93,8 @@ def gate_verdict(rows):
     try:
         import brake_memory
         ep = len(brake_memory._load().get("closed", []))
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"brake memory unreadable for gate ({e}); treating as 0 episodes", flush=True)
 
     enough = (total_closed >= MIN_TRADES_FOR_WINRATE and weeks >= MIN_WEEKS_FOR_VERDICT)
     if not enough:
@@ -167,6 +170,9 @@ def main():
     with open(LOG, "a") as f:
         f.write(log_entry)
     ok = send(tg_msg)
+    if not ok:
+        print("weekly review NOT delivered to Telegram (still written to learning_log.md)",
+              flush=True)
     print(f"weekly review written to learning_log.md; telegram delivered={ok}", flush=True)
 
 

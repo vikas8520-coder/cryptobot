@@ -17,7 +17,8 @@ import os
 from datetime import datetime, timezone
 
 import freqtrade_api
-from state_io import load_json, save_json, save_text
+import state_io
+from state_io import save_json, save_text
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CSVF = os.path.join(BASE, "equity_history.csv")
@@ -36,18 +37,21 @@ def balance(port, pw):
 
 
 def prices():
-    return {c: d.get("price") for c, d in load_json(BRAKE_STATE, {}).items()}
+    return {c: d.get("price") for c, d in state_io.load_json(BRAKE_STATE, {}).items()}
 
 
 def main():
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     px = prices()
 
-    st = load_json(STATE, {})
+    # strict: a corrupt state file must not read as {} — that re-anchors the BTC/basket
+    # benchmark to TODAY's price, silently invalidating the whole apples-to-apples series
+    st = state_io.load_json(STATE, {}, strict=True)
     if "btc_start" not in st and px.get("BTC"):
         st = {"btc_start": px["BTC"], "start_date": today,
               "basket_start": {c: px[c] for c in BASKET if px.get(c)}}
-        save_json(STATE, st, indent=2)
+        if not save_json(STATE, st, indent=2):
+            print("equity state commit FAILED — benchmark anchor not persisted", flush=True)
 
     row = {"date": today}
     for name, port, pw in BOTS:

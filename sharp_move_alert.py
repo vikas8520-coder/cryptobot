@@ -11,7 +11,8 @@ import os
 
 import brake_alerts as ba   # reuse the reachable-exchange picker
 import freqtrade_api
-from state_io import load_json, save_json, telegram_conf, verified_send
+import state_io
+from state_io import save_json, telegram_conf, verified_send
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONF = os.path.join(BASE, "telegram.conf")
@@ -64,7 +65,9 @@ def describe(name, st):
 
 
 def main():
-    state = load_json(STATE, {})
+    # strict: a corrupt state file would read as "not fired" and re-fire an alert that
+    # already went out (spam), or mask a genuine armed state — fail loud instead
+    state = state_io.load_json(STATE, {}, strict=True)
     armed = not state.get("fired", False)
 
     move, src = btc_24h()
@@ -95,7 +98,8 @@ def main():
         state["fired"] = False     # re-arm for the next move
 
     state["last_move"] = round(move, 2)
-    save_json(STATE, state)        # atomic — see state_io.py
+    if not save_json(STATE, state):   # atomic — see state_io.py
+        print("state commit FAILED — arm/fire flag not persisted this run", flush=True)
 
 
 if __name__ == "__main__":

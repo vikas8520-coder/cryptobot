@@ -234,7 +234,7 @@ def cmd_macro(args):
     wf = "/Users/vikasreddy/cryptobot/macro_watchlist.json"
     if not os.path.exists(sf):
         return "📈 No macro data yet — the 6h job will populate it shortly."
-    state = load_json(sf)
+    state = load_json(sf, None)
     if state is None:
         return "❌ macro read error: macro_alert_state.json is unreadable"
     names = {}

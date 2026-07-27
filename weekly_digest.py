@@ -3,12 +3,12 @@
 Weekly digest — a once-a-week Telegram summary of both trading bots + carry.
 Scheduled via launchd (Sunday evening). Send-only; coexists with the listener.
 """
-import requests, subprocess
+import subprocess
 from local_secrets import api_pw
 from datetime import datetime
 
 from freqtrade_api import get as api_get
-from state_io import telegram_conf
+from state_io import telegram_conf, verified_send
 
 CONF = "/Users/vikasreddy/cryptobot/telegram.conf"
 CHAT, API = telegram_conf(CONF)
@@ -18,7 +18,9 @@ BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081))]
 
 
 def send(text):
-    requests.post(f"{API}/sendMessage", data={"chat_id": CHAT, "text": text}, timeout=20)
+    """Verified send — the old fire-and-forget requests.post swallowed every failure,
+    so a dropped weekly digest looked identical to a delivered one."""
+    return verified_send(API, CHAT, text, feed_source="digest")
 
 
 def bot_section(name, port, pw):
@@ -71,7 +73,10 @@ def main():
     parts.append("")
     parts.append("💡 Paper money — your learning/preservation sandbox. "
                  "Judge nothing on one week; regimes play out over months.")
-    send("\n".join(parts))
+    if not send("\n".join(parts)):
+        print("weekly digest NOT delivered (Telegram unconfirmed)", flush=True)
+    else:
+        print("weekly digest delivered", flush=True)
 
 
 if __name__ == "__main__":

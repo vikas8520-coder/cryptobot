@@ -38,7 +38,7 @@ START_EACH = 1000.0
 
 def read_macro():
     """Cached macro brake board (stocks/bonds/gold) from the 6h macro job."""
-    state = load_json(MACRO_STATE)
+    state = load_json(MACRO_STATE, None)
     if state is None:
         return []
     try:
@@ -70,7 +70,7 @@ def read_trend():
     """Cached trendline board (Tori's valid-line filters) from the 4h trendline job.
     Returns {updated, source, coins:[...]} or empty. Setups (bounce/break/reject)
     sort to the top; 'inside channel' coins fall below."""
-    d = load_json(TREND_BOARD)
+    d = load_json(TREND_BOARD, None)
     if d is None:
         return {}
     try:
@@ -85,7 +85,7 @@ def read_trend():
 
 def read_portfolio():
     """Cached diversified-braked portfolio map (mirrors the /portfolio Telegram view)."""
-    d = load_json(PORTFOLIO_BOARD)
+    d = load_json(PORTFOLIO_BOARD, None)
     if d is None:
         return {}
     d["_paused"] = _job_paused("divbrake")
@@ -164,12 +164,19 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE, "static")), name="
 CRYPTO_COINS = ["BTC", "ETH", "SOL", "XRP", "ADA", "LTC",
                 "DOGE", "LINK", "BNB", "AVAX", "DOT", "TRX"]
 
+# The exact macro tickers the chart selector offers (CHART_ASSETS in the page JS).
+# The macro branch feeds `asset` straight into yfinance, so gate it to this allowlist
+# rather than fetching whatever arbitrary string a caller supplies (unvalidated input).
+MACRO_ASSETS = {"SPY", "QQQ", "^NSEI", "TLT", "GLD", "PPLT"}
+
 
 @app.get("/api/candles")
 def candles(asset: str):
     """OHLCV daily candles + 200-day line for one asset. Crypto comes from the
     braked-hold bot (sma200 pre-computed); macro comes from yfinance."""
     a = asset.upper()
+    if a not in CRYPTO_COINS and a not in MACRO_ASSETS:
+        return JSONResponse({"error": "unknown asset"}, status_code=400)
     try:
         if a in CRYPTO_COINS:
             r = freqtrade_api.get(8082, api_pw(8082), "pair_candles", timeout=10,

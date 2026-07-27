@@ -20,11 +20,14 @@ per-user chat/email + their chosen coins — plugs in at SUBSCRIBERS below.
 """
 import os
 import sys
+import time
 from datetime import datetime, timezone
 
 import ccxt
+import requests
 
-from state_io import acquire_lock, load_json, save_json, telegram_conf, verified_send
+import state_io
+from state_io import save_json, telegram_conf, verified_send
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONF = os.path.join(BASE, "telegram.conf")
@@ -52,6 +55,11 @@ def log(msg):
 def send_telegram(chat_id, text):
     """Verified send — True only if Telegram confirmed delivery ({"ok": true})."""
     return verified_send(API, chat_id, text, feed_source="brake")
+
+
+def load_json(path, default, strict=False):
+    """Shared loader (state_io): missing -> default, unreadable -> logged / StateCorrupt."""
+    return state_io.load_json(path, default, strict=strict)
 
 
 def pick_exchange():
@@ -86,10 +94,17 @@ def fmt(v):
     return f"${v:,.3f}" if v < 1 else f"${v:,.2f}"
 
 
+def acquire_lock(name):
+    """Shared lock (state_io), rooted at this module's BASE."""
+    return state_io.acquire_lock(name, log=log, base=BASE)
+
+
 def main():
-    _lock = acquire_lock("brake_alerts", log=log)
+    _lock = acquire_lock("brake_alerts")
     watch = load_json(WATCHLIST, {"coins": DEFAULT_WATCH}).get("coins", DEFAULT_WATCH)
-    state = load_json(STATE, {})            # {coin: {"state","price","sma","since"}}
+    # strict: an unreadable state file must NOT masquerade as a first run — that path
+    # re-baselines every coin and swallows the flip it was supposed to alert on
+    state = load_json(STATE, {}, strict=True)   # {coin: {"state","price","sma","since"}}
     first_run = not state
 
     src_name, ex = pick_exchange()
@@ -126,7 +141,7 @@ def main():
     # The reverse order lost the alert forever (state says "no change", queue empty).
     if not first_run and flips:
         import brake_memory
-        pending = load_json(PENDING, [])
+        pending = load_json(PENDING, [], strict=True)
         for coin, old, new, price, sma in flips:
             try:
                 brake_memory.record_flip(coin, old, new, price, sma, ts=now_iso)
@@ -149,9 +164,14 @@ def main():
                 if sub["channel"] == "telegram":
                     pending.append({"chat_id": sub["chat_id"], "text": msg})
             log(f"ALERT queued: {coin} {old} -> {new}")
-        save_json(PENDING, pending)
+        if not save_json(PENDING, pending):
+            # committing the new state now would tell the next run "no flip here" while
+            # the alert never made it to the queue — abort instead and re-detect next run
+            log("FATAL: could not queue flip alerts — leaving state uncommitted to retry")
+            sys.exit(1)
 
-    save_json(STATE, snapshot, indent=2)          # atomic — see state_io.py
+    if not save_json(STATE, snapshot, indent=2):  # atomic — see state_io.py
+        log("state commit FAILED — flips will be re-detected (and re-queued) next run")
 
     if first_run:
         # baseline quietly, but send a one-time "now watching" summary
@@ -175,7 +195,8 @@ def main():
     remaining = [m for m in pending
                  if not send_telegram(m["chat_id"], m["text"])]
     if remaining != pending:
-        save_json(PENDING, remaining)     # only rewrite when something was delivered
+        if not save_json(PENDING, remaining):   # only rewrite when something was delivered
+            log("queue rewrite FAILED — delivered alert(s) may be re-sent next run")
     if remaining:
         log(f"{len(remaining)} alert(s) NOT delivered — kept pending, retrying next run")
     elif pending:

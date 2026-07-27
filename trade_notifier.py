@@ -8,11 +8,12 @@ State is persisted so restarts don't re-spam. On the very first run it baselines
 the current trades silently (so you don't get flooded with history) and only
 notifies on events AFTER that.
 """
-import time
+import time, os
 from local_secrets import api_pw
 
+import state_io
 from freqtrade_api import get as api_get
-from state_io import load_json, save_json, telegram_conf, verified_send
+from state_io import save_json, telegram_conf, verified_send
 
 CONF = "/Users/vikasreddy/cryptobot/telegram.conf"
 CHAT, API = telegram_conf(CONF)
@@ -27,9 +28,12 @@ def send(text):
 
 
 def load_state():
-    """(state, first_run) — an unreadable/absent state file means baseline silently."""
-    st = load_json(STATE)
-    return (st, False) if st is not None else ({}, True)
+    # A MISSING file is a genuine first run (baseline silently). A file that EXISTS but
+    # is corrupt must NOT be mistaken for one — that path re-baselines and silently
+    # drops every open/close that happened during the outage. Fail loud instead.
+    if not os.path.exists(STATE):
+        return {}, True
+    return state_io.load_json(STATE, {}, strict=True), False
 
 
 def main():
@@ -82,7 +86,10 @@ def main():
             state[name]["opened"] = sorted(opened)
             state[name]["closed"] = sorted(closed)
 
-        save_json(STATE, state)    # atomic — see state_io.py
+        if not save_json(STATE, state):   # atomic — see state_io.py
+            # a lost write means the next poll re-reads stale notified-ids and could
+            # re-send — surface it rather than pretend the checkpoint stuck
+            print("notifier state commit FAILED — may re-notify next poll", flush=True)
         first_run = False
         time.sleep(POLL)
 

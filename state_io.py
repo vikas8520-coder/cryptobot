@@ -14,12 +14,16 @@ audit found everywhere:
      chunks. The old fire-and-forget senders swallowed every failure, so a
      dropped alert looked identical to "all clear".
 
-Plus the three boilerplate blocks every job used to re-type by hand (a copy in each
-file meant a fix — e.g. a missing telegram.conf raising AttributeError at import —
-had to be made 9 times):
+  3. load_json (audit 2026-07-26): the mirror image of (1). Every module had its own
+     `try: json.load(...) except: pass -> default` loader, so a truncated state file
+     was INDISTINGUISHABLE from a first run: the guardian's breaker un-tripped, the
+     brake re-baselined (losing queued flips), the memory wiped its track record.
+     Missing file -> default (a real first run); unreadable file -> loud log, and
+     StateCorrupt when the caller passes strict=True (state whose loss is not
+     recoverable by re-deriving it next run).
 
-  3. load_json:      exists -> try json.load -> except -> default.
-  4. telegram_conf:  parse TG_TOKEN/TG_CHAT out of telegram.conf into (chat, api).
+  4. telegram_conf:  parse TG_TOKEN/TG_CHAT out of telegram.conf into (chat, api) —
+     nine hand-typed copies of the same regex pair.
   5. acquire_lock:   flock a .<name>.lock so a manual run can't interleave with the
      scheduled one and clobber the pending-alert queue.
 """
@@ -40,31 +44,23 @@ FEED_MAX_BYTES = 512 * 1024      # keep the feed bounded (dashboard reads the ta
 FEED_KEEP_LINES = 300
 
 
-def append_feed(source, text):
-    """Append one delivered push-alert to the shared activity feed the dashboard mirrors.
-    Every Telegram ALERT flows through verified_send, so tagging it here gives the desk
-    automatic parity with Telegram — command replies (feed_source=None) are NOT logged."""
+class StateCorrupt(Exception):
+    """A state file exists but could not be parsed — never treat this as a first run."""
+
+
+def load_json(path, default, strict=False):
+    """Read JSON from path. A MISSING file returns default (genuine first run); an
+    existing but unreadable one is always logged, and raises StateCorrupt if strict."""
+    if not os.path.exists(path):
+        return default
     try:
-        entry = json.dumps({"ts": datetime.now(timezone.utc).isoformat(),
-                            "source": source, "text": text})
-        with open(FEED, "a") as f:
-            f.write(entry + "\n")
-        if os.path.getsize(FEED) > FEED_MAX_BYTES:          # trim to the last N lines
-            lines = open(FEED).read().splitlines()[-FEED_KEEP_LINES:]
-            save_text(FEED, "\n".join(lines) + "\n")
+        with open(path) as f:
+            return json.load(f)
     except Exception as e:
-        print(f"append_feed failed: {e}", flush=True)
-
-
-def load_json(path, default=None):
-    """Read JSON defensively: a missing file or corrupt/partial content yields default
-    (never an exception) — every loader in the stack already wanted exactly this."""
-    if os.path.exists(path):
-        try:
-            return json.load(open(path))
-        except Exception:
-            pass
-    return default
+        print(f"load_json({os.path.basename(path)}) UNREADABLE: {e}", flush=True)
+        if strict:
+            raise StateCorrupt(f"{path}: {e}") from e
+        return default
 
 
 def telegram_conf(path=TG_CONF):
@@ -84,17 +80,33 @@ def tg_token(api):
     return api.rsplit("/bot", 1)[-1]
 
 
-def acquire_lock(name, log=print):
+def acquire_lock(name, log=print, base=None):
     """Serialize runs (manual + scheduled interleavings clobbered the pending queue).
     Returns the lock file handle — KEEP IT REFERENCED, a GC'd handle drops the flock —
     or exits 0 if another run already holds it."""
-    fh = open(os.path.join(BASE, f".{name}.lock"), "w")
+    fh = open(os.path.join(base or BASE, f".{name}.lock"), "w")
     try:
         fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         log("another run already in progress — exiting quietly")
         sys.exit(0)
     return fh
+
+
+def append_feed(source, text):
+    """Append one delivered push-alert to the shared activity feed the dashboard mirrors.
+    Every Telegram ALERT flows through verified_send, so tagging it here gives the desk
+    automatic parity with Telegram — command replies (feed_source=None) are NOT logged."""
+    try:
+        entry = json.dumps({"ts": datetime.now(timezone.utc).isoformat(),
+                            "source": source, "text": text})
+        with open(FEED, "a") as f:
+            f.write(entry + "\n")
+        if os.path.getsize(FEED) > FEED_MAX_BYTES:          # trim to the last N lines
+            lines = open(FEED).read().splitlines()[-FEED_KEEP_LINES:]
+            save_text(FEED, "\n".join(lines) + "\n")
+    except Exception as e:
+        print(f"append_feed failed: {e}", flush=True)
 
 
 def save_json(path, obj, indent=None):

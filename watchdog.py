@@ -26,7 +26,8 @@ import time
 import requests
 
 import freqtrade_api
-from state_io import load_json, save_json, telegram_conf, verified_send
+import state_io
+from state_io import save_json, telegram_conf, verified_send
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONF = os.path.join(BASE, "telegram.conf")
@@ -111,7 +112,10 @@ def check():
 
 
 def main():
-    st = load_json(STATE, {})
+    # strict: a corrupt state file must not read as "nothing was broken" (which both
+    # re-alerts every current problem as NEW and loses the pending-recovery set) —
+    # fail loud so the run is retried against real prior state next cycle
+    st = state_io.load_json(STATE, {}, strict=True)
     prev = set(st.get("broken", []))
     stale_pending = st.get("brake_stale_pending", False)
 
@@ -146,8 +150,10 @@ def main():
             persisted |= recovered
             print("recovery alert NOT delivered — will retry next run", flush=True)
 
-    save_json(STATE, {"broken": sorted(persisted), "ts": time.time(),
-                      "brake_stale_pending": stale_pending})
+    if not save_json(STATE, {"broken": sorted(persisted), "ts": time.time(),
+                             "brake_stale_pending": stale_pending}):
+        # a lost write means next run re-alerts everything as NEW — make it loud
+        print("watchdog state write FAILED — may re-alert next run", flush=True)
     print("broken:", sorted(now_set) or "none healthy", flush=True)
 
 

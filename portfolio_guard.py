@@ -18,8 +18,9 @@ import time, os
 from local_secrets import api_pw
 
 import freqtrade_api
+import state_io
 from freqtrade_api import get as api_get
-from state_io import load_json, save_json, telegram_conf, verified_send
+from state_io import save_json, telegram_conf, verified_send
 
 CONF = "/Users/vikasreddy/cryptobot/telegram.conf"
 CHAT, API = telegram_conf(CONF)
@@ -56,7 +57,13 @@ def coin(pair):
 
 
 def load_state():
-    return load_json(STATE, {})
+    # strict: a corrupt guard_state.json must NEVER read as {} — that silently
+    # un-trips the circuit breaker and re-baselines the high-water mark. Raise so the
+    # loop below alerts and skips the cycle (taking NO trading action) rather than
+    # acting on a blank slate. A missing file (true first boot) still returns {}.
+    if not os.path.exists(STATE):
+        return {}
+    return state_io.load_json(STATE, {}, strict=True)
 
 
 def main():
@@ -70,7 +77,15 @@ def main():
         try:
             # consume a /reset request (flag file written by TraderJoy) — this loop
             # is the single writer of guard_state.json, so no read-modify-write race
-            state = load_state()
+            try:
+                state = load_state()
+            except state_io.StateCorrupt as e:
+                # blind is safer than wrong: don't act on a blank breaker state
+                send(f"🚨 GUARDIAN: guard_state.json unreadable ({e}); skipping this "
+                     f"cycle and taking NO action. Fix/delete the file to resume.")
+                dd_breach_count = 0
+                time.sleep(POLL)
+                continue
             if os.path.exists(RESET_REQ):
                 try:
                     os.remove(RESET_REQ)
@@ -80,7 +95,9 @@ def main():
                 state["paused_by_guard"] = False
                 state["peak_balance"] = 0.0    # re-baseline high-water mark
                 dd_breach_count = 0
-                save_json(STATE, state)
+                if not save_json(STATE, state):
+                    send("⚠️ GUARDIAN: /reset could not be persisted (disk?) — it may "
+                         "re-apply next cycle. Check disk/permissions.")
                 for _, port, pw in BOTS:
                     api_post(port, pw, "reload_config")
                 send("🔄 GUARDIAN: /reset applied — breaker cleared, peak re-baselined, "
@@ -129,16 +146,26 @@ def main():
                       f"confirming next poll before tripping", flush=True)
 
             elif dd >= MAX_DRAWDOWN:
-                for _, port, pw in BOTS:
-                    api_post(port, pw, "forceexit", {"tradeid": "all"})
+                # don't CLAIM "closed all" if the API calls failed — a swallowed
+                # forceexit error here would leave positions open while the alert
+                # says they're flat, the most dangerous possible false report
+                failed = []
+                for nm, port, pw in BOTS:
+                    fx = api_post(port, pw, "forceexit", {"tradeid": "all"})
+                    if not isinstance(fx, dict) or fx.get("error"):
+                        failed.append(nm)
                     api_post(port, pw, "stopentry")
                 tripped = True
                 paused = True
                 dd_breach_count = 0
+                closed_line = ("CLOSED ALL positions and HALTED both bots."
+                               if not failed else
+                               f"HALTED both bots, but the force-close FAILED on: "
+                               f"{', '.join(failed)} — positions may still be OPEN. "
+                               f"CHECK MANUALLY NOW.")
                 send(f"🚨🚨 CIRCUIT BREAKER TRIPPED — portfolio drawdown {dd*100:.1f}% "
                      f"(peak ${peak:.0f} → ${combined_bal:.0f}), confirmed on 2 polls. "
-                     f"CLOSED ALL positions and HALTED both bots. Manual review required "
-                     f"— send /reset to resume.")
+                     f"{closed_line} Manual review required — send /reset to resume.")
 
             else:
                 dd_breach_count = 0            # breach didn't persist — stand down
@@ -187,8 +214,11 @@ def main():
                     send(f"⚠️➡️✅ GUARDIAN: both bots were LONG {c} (concentration). "
                          f"Auto-closed the futures leg #{ft['trade_id']}. Kept the spot position.")
 
-            save_json(STATE, {"paused_by_guard": paused, "cooldown": cooldown,
-                              "peak_balance": peak, "breaker_tripped": tripped})
+            if not save_json(STATE, {"paused_by_guard": paused, "cooldown": cooldown,
+                                     "peak_balance": peak, "breaker_tripped": tripped}):
+                # a lost write can silently lose a fresh breaker-trip — make it loud
+                print("GUARDIAN: guard_state.json write FAILED — state not persisted "
+                      "this cycle", flush=True)
         except Exception as e:
             # reset the breach counter too — otherwise "2 CONSECUTIVE polls" would
             # degrade to "2 breach polls separated by any number of error polls"
