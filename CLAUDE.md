@@ -30,6 +30,24 @@ Ops layer: `dashboard.py` (:8090), `telegram_bot.py` (control + alerts),
   offline. `telegram.conf` / `local_secrets.py` / `config_*.secret.json` are secrets
   (git-ignored). Do not restart launchd jobs or deploy unless explicitly asked.
 
+## Tests
+`tests/` (pytest), fully offline — no exchange, no Telegram, no live state files.
+
+```
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+.venv/bin/python -m pytest --cov --cov-report=term-missing
+```
+
+Covered: `state_io`, `logrotate`, `brake_memory`, `stats_lib`, `risk_lib`,
+`brake_alerts`, `trendline_signal`. Conventions: repoint a module's path constants at
+`tmp_path` (never write the real journal/state/logs), monkeypatch senders, replace the
+exchange with a fake that replays canned OHLCV, and build synthetic price series whose
+answer is known analytically. `tests/conftest.py` drops a dummy `telegram.conf` only if
+one is missing (import-time parse) and removes it after. Modules that read
+`local_secrets` / absolute `/Users/...` paths at import (guardian, notifier, digests)
+are not importable in a test process — extract logic into a lib to make it testable.
+
 ## Delegating to Hermes (the other agent)
 Hermes is a second AI agent on this machine with tools you don't have: **web
 search/extract, browser automation, image generation, cron scheduling, and its own

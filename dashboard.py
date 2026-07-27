@@ -121,12 +121,19 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE, "static")), name="
 CRYPTO_COINS = ["BTC", "ETH", "SOL", "XRP", "ADA", "LTC",
                 "DOGE", "LINK", "BNB", "AVAX", "DOT", "TRX"]
 
+# The exact macro tickers the chart selector offers (CHART_ASSETS in the page JS).
+# The macro branch feeds `asset` straight into yfinance, so gate it to this allowlist
+# rather than fetching whatever arbitrary string a caller supplies (unvalidated input).
+MACRO_ASSETS = {"SPY", "QQQ", "^NSEI", "TLT", "GLD", "PPLT"}
+
 
 @app.get("/api/candles")
 def candles(asset: str):
     """OHLCV daily candles + 200-day line for one asset. Crypto comes from the
     braked-hold bot (sma200 pre-computed); macro comes from yfinance."""
     a = asset.upper()
+    if a not in CRYPTO_COINS and a not in MACRO_ASSETS:
+        return JSONResponse({"error": "unknown asset"}, status_code=400)
     try:
         if a in CRYPTO_COINS:
             r = requests.get("http://127.0.0.1:8082/api/v1/pair_candles",
