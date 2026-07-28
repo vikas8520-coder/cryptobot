@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-25d"
+DASH_VERSION = "2026-07-27a"
 import csv
 from local_secrets import api_pw
 import json
@@ -96,6 +96,50 @@ def read_equity():
     except Exception:
         pass
     return out
+
+
+# Map the human-facing bot name to the equity_history.csv column, so we can
+# compute max drawdown from the logged daily balance series. Some bots (scalp,
+# daytrade) are not tracked in the CSV because they are not on the scorecard.
+BOT_EQUITY_KEY = {
+    "Spot": "spot", "Futures": "futures", "Braked Hold": "brakedhold",
+    "S&P 500": "spx", "Nifty 50": "nifty", "ONGC": "ongc",
+    "ITC": "itc", "BTC": "btc",
+}
+
+
+def max_dd_for(name, balance, prof, eq_hist):
+    """Best-effort max drawdown for a bot. Freqtrade bots report it in /profit;
+    the apex_api shim (Nifty/ITC/ONGC) does not, so we compute it from
+    equity_history.csv plus the current balance. If both sources exist, use the
+    larger (more conservative) number."""
+    # 1) what the bot's own /profit endpoint already reports
+    prof_dd = (prof.get("max_drawdown") or 0.0) * 100.0
+
+    # 2) historical series from equity_history.csv, with current balance appended
+    key = BOT_EQUITY_KEY.get(name)
+    hist = []
+    if key and eq_hist:
+        for r in eq_hist:
+            v = r.get(key)
+            if v is not None and v > 0:
+                hist.append(v)
+    if balance and balance > 0:
+        hist.append(float(balance))
+
+    csv_dd = 0.0
+    if hist:
+        peak = hist[0]
+        m = 0.0
+        for v in hist:
+            if v > peak:
+                peak = v
+            dd = (peak - v) / peak if peak > 0 else 0.0
+            if dd > m:
+                m = dd
+        csv_dd = m * 100.0
+
+    return round(max(prof_dd, csv_dd), 2)
 
 
 BOTS = [
@@ -273,6 +317,7 @@ def api(port, pw, ep):
 @app.get("/api/overview")
 def overview():
     bots, tot_bal = [], 0.0
+    eq_hist = read_equity()
     for name, port, pw, desc in BOTS:
         cfg = api(port, pw, "show_config") or {}
         bal = api(port, pw, "balance") or {}
@@ -317,6 +362,7 @@ def overview():
             "profit_pct": prof.get("profit_closed_percent", 0) or 0,
             "trades": prof.get("closed_trade_count", 0) or 0,
             "winrate": (prof.get("winrate", 0) or 0) * 100,
+            "max_dd": max_dd_for(name, b, prof, eq_hist),
             "open": opens, "equity": eq,
             "currency": currency,    # [PAPER EQUITY] lets the card show ₹ vs $ per-bot
             # the coin universe the bot is monitoring (base symbols), incl. any open-trade
@@ -372,7 +418,7 @@ def overview():
         "portfolio": read_portfolio(),
         "activity": read_activity(),
         "memory": mem,
-        "equity_history": read_equity(),
+        "equity_history": eq_hist,
     })
 
 
@@ -564,6 +610,7 @@ PAGE = r"""<!doctype html>
     white-space:nowrap;}
   .tile .tmetrics{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-top:2px;}
   .tile .tm{display:flex;flex-direction:column;gap:1px;}
+  .tile .tm.full{grid-column:1 / -1;}
   .tile .tm .k{font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);}
   .tile .tm .v{font-family:var(--mono);font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;}
   .tile .tm .v.sm{font-size:11.5px;font-weight:600;}
@@ -1195,6 +1242,9 @@ switchChartView("trader");   // default to the ApeX-style Trader view (theme now
 const money=(v,cur="USD")=>{const s=cur==="INR"?"₹":"$";return s+(v>=1000?v.toLocaleString(undefined,{maximumFractionDigits:0}):v.toFixed(2));};
 const pct=v=>(v>=0?"+":"")+v.toFixed(2)+"%";
 const cls=v=>v>0?"pos":v<0?"neg":"";
+// drawdown is stored as a positive number but rendered as a negative % (red)
+const dd=v=>v>0.001?("-"+v.toFixed(2)+"%"):v<-0.001?("+"+(-v).toFixed(2)+"%"):"0.00%";
+const clsdd=v=>v>0.001?"neg":"";
 const price=v=>v>=1000?"$"+v.toLocaleString(undefined,{maximumFractionDigits:0}):v>=1?"$"+v.toFixed(2):"$"+v.toFixed(3);
 
 let _sparkN=0;
@@ -1286,6 +1336,7 @@ function botRow(b,cat){
         <div class="tm"><span class="k">Closed P&amp;L</span><span class="v ${cls(b.profit_pct)}">${parrow}${pct(b.profit_pct)}</span></div>
         <div class="tm"><span class="k">Trades</span><span class="v sm">${b.trades}</span></div>
         <div class="tm"><span class="k">Win</span><span class="v sm">${b.trades?wr+"%":"—"}</span></div>
+        <div class="tm full"><span class="k">Max DD</span><span class="v ${clsdd(b.max_dd)}">${dd(b.max_dd)}</span></div>
       </div>
       <div class="tspark">${sparkmini(b.equity)}</div>
       <div class="tfoot"><span class="state ${sc}"><i class="livedot"></i>${stxt}</span>${b.open.length?` <span class="opct">${b.open.length} open</span>`:""}<span class="tchev">›</span></div>
