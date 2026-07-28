@@ -1,17 +1,19 @@
-# TrendFollowLS2 — long+short, but SHORTS are gated by a market-regime filter.
+# TrendFollowLS2 — long+short, BOTH sides gated by BTC market-regime filters.
 #
 # TrendFollowLS problem: it shorted during bull-market PULLBACKS and got
 # squeezed, cutting the bull return (+5.2% vs long-only +7.8%). The shorts
 # themselves are fine in a bear; the issue is shorting inside an uptrend.
+# Audit 2026-07-27: on the OKX 4h futures backtest longs ALSO lost money in a
+# bear market (-4.73%), so longs now require a confirmed BTC uptrend too.
 #
-# FIX (minimal, surgical): only allow SHORT entries when BTC — the market tide —
-# is in a CONFIRMED downtrend. Longs are left completely unchanged.
-#   short allowed  <=>  BTC close < BTC EMA200  AND  BTC EMA50 < BTC EMA200,
-#                       sustained for 12h (confirmation, so a brief BTC dip
-#                       inside a bull doesn't switch shorting on).
-# In a bull, BTC is above its EMA200 -> shorting is DISABLED -> no pullback
-# shorts -> the bull return should recover to ~long-only. In a bear, BTC is
-# below -> shorting is ON -> capture the downside.
+# FIX:
+#   long  allowed <=> BTC close > BTC EMA200 AND BTC EMA50 > BTC EMA200,
+#                       sustained for 12h (so a brief BTC pop inside a bear
+#                       doesn't switch longs on).
+#   short allowed <=> BTC close < BTC EMA200 AND BTC EMA50 < BTC EMA200,
+#                       sustained for 12h (so a brief BTC dip inside a bull
+#                       doesn't switch shorts on).
+# In a bull, shorts are disabled; in a bear, longs are disabled.
 
 from freqtrade.exchange import timeframe_to_minutes
 from freqtrade.strategy import IStrategy, merge_informative_pair
@@ -42,10 +44,10 @@ class TrendFollowLS2(IStrategy):
     # ADX35 train: PF 0.82 / DD 3.38%; hold-out: PF 1.73 / DD 4.40% vs ADX25 1.24/7.48%.
     ADX_MIN = 35
 
-    # Wall-clock duration BTC must stay bearish before shorts turn on. Kept in
-    # HOURS (not candles) so a timeframe change doesn't silently change the
-    # confirmation window: at 1h this was 12 candles, at 4h it is 3 candles.
-    SHORT_CONFIRM_HOURS = 12
+    # Wall-clock duration BTC must stay above/below its EMAs before long/short
+    # entries turn on. Kept in HOURS (not candles) so a timeframe change doesn't
+    # silently change the confirmation window: at 1h this is 12 candles, at 4h 3.
+    CONFIRM_HOURS = 12
 
     def leverage(self, pair, current_time, current_rate, proposed_leverage,
                  max_leverage, entry_tag, side, **kwargs) -> float:
@@ -65,35 +67,47 @@ class TrendFollowLS2(IStrategy):
 
         # merge_informative_pair appends "_{timeframe_inf}" to every merged column,
         # so the column name must track self.timeframe (which config.json can override).
+        long_ok_col = f"btc_long_ok_{self.timeframe}"
         short_ok_col = f"btc_short_ok_{self.timeframe}"
 
         if self.dp:
             btc = self.dp.get_pair_dataframe("BTC/USDT:USDT", self.timeframe).copy()
             btc["btc_ema50"] = ta.EMA(btc, timeperiod=50)
             btc["btc_ema200"] = ta.EMA(btc, timeperiod=200)
+
+            bull_raw = (
+                (btc["close"] > btc["btc_ema200"])
+                & (btc["btc_ema50"] > btc["btc_ema200"])
+            ).astype(int)
             bear_raw = (
                 (btc["close"] < btc["btc_ema200"])
                 & (btc["btc_ema50"] < btc["btc_ema200"])
             ).astype(int)
-            # confirmed bear = last SHORT_CONFIRM_HOURS worth of candles ALL bear
+
+            # confirmed trend = last CONFIRM_HOURS worth of candles ALL in the regime
             confirm_candles = max(
-                1, self.SHORT_CONFIRM_HOURS * 60 // timeframe_to_minutes(self.timeframe)
+                1, self.CONFIRM_HOURS * 60 // timeframe_to_minutes(self.timeframe)
             )
+            btc["btc_long_ok"] = bull_raw.rolling(confirm_candles).min().fillna(0).astype(int)
             btc["btc_short_ok"] = bear_raw.rolling(confirm_candles).min().fillna(0).astype(int)
+
             dataframe = merge_informative_pair(
-                dataframe, btc[["date", "btc_short_ok"]],
+                dataframe, btc[["date", "btc_long_ok", "btc_short_ok"]],
                 self.timeframe, self.timeframe, ffill=True,
             )
         else:
+            # No BTC regime data: stay flat rather than trade ungated.
+            dataframe[long_ok_col] = 0
             dataframe[short_ok_col] = 0
 
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        # LONG — trend stack + above 200-EMA + stronger ADX + volume (audit 2026-07-23)
+        # LONG — trend stack + above 200-EMA + confirmed BTC uptrend + ADX + volume
         dataframe.loc[
             (
-                (dataframe["close"] > dataframe["ema_fast"])
+                (dataframe[f"btc_long_ok_{self.timeframe}"] == 1)
+                & (dataframe["close"] > dataframe["ema_fast"])
                 & (dataframe["ema_fast"] > dataframe["ema_slow"])
                 & (dataframe["ema_slow"] > dataframe["ema_trend"])
                 & (dataframe["close"] > dataframe["ema200"])
