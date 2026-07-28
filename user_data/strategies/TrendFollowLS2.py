@@ -36,8 +36,11 @@ class TrendFollowLS2(IStrategy):
 
     process_only_new_candles = True
     startup_candle_count = 220   # BTC EMA200 + confirmation candles
-    # Minimum ADX for entry (was hard-coded 20; too many weak-trend whipsaws).
-    ADX_MIN = 25
+    # Minimum ADX for entry. Audit 2026-07-27: ADX sweep on OKX 4h futures
+    # (LINK/AVAX/LTC/ADA, train 2025-07-20→2026-01-20, hold-out 2026-01-20→2026-07-20)
+    # showed ADX35 beats 20/25/30 on PF, expectancy and max-drawdown in BOTH splits.
+    # ADX35 train: PF 0.82 / DD 3.38%; hold-out: PF 1.73 / DD 4.40% vs ADX25 1.24/7.48%.
+    ADX_MIN = 35
 
     # Wall-clock duration BTC must stay bearish before shorts turn on. Kept in
     # HOURS (not candles) so a timeframe change doesn't silently change the
