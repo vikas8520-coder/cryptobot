@@ -1,0 +1,133 @@
+{
+  "regime": {
+    "stcg": 0.208,
+    "ltcg": 0.13,
+    "stt_side": 0.001,
+    "other_rt": 0.002,
+    "ltcg_days": 365
+  },
+  "years": 17.6,
+  "results": [
+    {
+      "variant": "B&H (LTCG 13%)",
+      "trades": 1,
+      "avg_hold_days": 6412.0,
+      "stcg_trades": 0,
+      "ltcg_trades": 1,
+      "pretax_total_pct": 787.6,
+      "aftercost_total_pct": 784.0,
+      "aftertax_total_pct": 682.1,
+      "aftertax_cagr_pct": 12.43
+    },
+    {
+      "variant": "SMA fast 5/20",
+      "trades": 139,
+      "avg_hold_days": 27.9,
+      "stcg_trades": 56,
+      "ltcg_trades": 0,
+      "pretax_total_pct": 219.6,
+      "aftercost_total_pct": 83.2,
+      "aftertax_total_pct": 55.5,
+      "aftertax_cagr_pct": 2.55
+    },
+    {
+      "variant": "SMA 10/50",
+      "trades": 50,
+      "avg_hold_days": 83.0,
+      "stcg_trades": 26,
+      "ltcg_trades": 0,
+      "pretax_total_pct": 378.3,
+      "aftercost_total_pct": 291.5,
+      "aftertax_total_pct": 193.5,
+      "aftertax_cagr_pct": 6.33
+    },
+    {
+      "variant": "SMA 20/100",
+      "trades": 24,
+      "avg_hold_days": 168.4,
+      "stcg_trades": 9,
+      "ltcg_trades": 3,
+      "pretax_total_pct": 152.4,
+      "aftercost_total_pct": 129.3,
+      "aftertax_total_pct": 102.5,
+      "aftertax_cagr_pct": 4.1
+    },
+    {
+      "variant": "SMA golden 50/200",
+      "trades": 11,
+      "avg_hold_days": 358.6,
+      "stcg_trades": 1,
+      "ltcg_trades": 5,
+      "pretax_total_pct": 93.5,
+      "aftercost_total_pct": 85.1,
+      "aftertax_total_pct": 67.9,
+      "aftertax_cagr_pct": 3.0
+    },
+    {
+      "variant": "SMA slow 100/300",
+      "trades": 6,
+      "avg_hold_days": 712.5,
+      "stcg_trades": 0,
+      "ltcg_trades": 4,
+      "pretax_total_pct": 159.6,
+      "aftercost_total_pct": 153.4,
+      "aftertax_total_pct": 125.2,
+      "aftertax_cagr_pct": 4.73
+    },
+    {
+      "variant": "V3 price x 200DMA",
+      "trades": 79,
+      "avg_hold_days": 55.4,
+      "stcg_trades": 22,
+      "ltcg_trades": 4,
+      "pretax_total_pct": 192.2,
+      "aftercost_total_pct": 113.0,
+      "aftertax_total_pct": 89.8,
+      "aftertax_cagr_pct": 3.72
+    },
+    {
+      "variant": "V3 min-hold 63 bars (~91d)",
+      "trades": 22,
+      "avg_hold_days": 253.5,
+      "stcg_trades": 12,
+      "ltcg_trades": 4,
+      "pretax_total_pct": 361.6,
+      "aftercost_total_pct": 322.7,
+      "aftertax_total_pct": 243.9,
+      "aftertax_cagr_pct": 7.29
+    },
+    {
+      "variant": "V3 min-hold 126 bars (~182d)",
+      "trades": 15,
+      "avg_hold_days": 372.7,
+      "stcg_trades": 6,
+      "ltcg_trades": 5,
+      "pretax_total_pct": 375.7,
+      "aftercost_total_pct": 348.0,
+      "aftertax_total_pct": 269.1,
+      "aftertax_cagr_pct": 7.72
+    },
+    {
+      "variant": "V3 min-hold 252 bars (~365d)",
+      "trades": 10,
+      "avg_hold_days": 583.2,
+      "stcg_trades": 0,
+      "ltcg_trades": 8,
+      "pretax_total_pct": 390.9,
+      "aftercost_total_pct": 371.6,
+      "aftertax_total_pct": 291.7,
+      "aftertax_cagr_pct": 8.09
+    },
+    {
+      "variant": "V3 min-hold 380 bars (~550d)",
+      "trades": 7,
+      "avg_hold_days": 830.3,
+      "stcg_trades": 0,
+      "ltcg_trades": 5,
+      "pretax_total_pct": 386.9,
+      "aftercost_total_pct": 373.4,
+      "aftertax_total_pct": 299.0,
+      "aftertax_cagr_pct": 8.2
+    }
+  ]
+}

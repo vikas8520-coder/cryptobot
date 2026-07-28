@@ -34,8 +34,8 @@ import time
 from datetime import datetime, timezone
 
 import apex_api            # config-driven freqtrade-dialect shim, reused as-is
-import div_strategy        # instrument-agnostic SMA-cross + 200-DMA filter, reused as-is
 import ongc_store
+import ongc_trend_strategy # monthly 200DMA trend strategy for ONGC
 from state_io import save_json
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -103,7 +103,7 @@ class EngineState:
         self.cycles = 0
         self.last_cycle = 0.0
         self._lock = threading.RLock()
-        self.strategy = div_strategy.DividendStrategy(config)
+        self.strategy = ongc_trend_strategy.ONGCTrendStrategy(config)
         # Idempotence key set for dividend credits: "YYYY-MM-DD:<trade_id>". Without it the
         # 5s cycle loop would re-credit the same payout every tick all ex-date long.
         self.dividends_paid = set()

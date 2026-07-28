@@ -233,6 +233,22 @@ def main():
     results.append(run_variant("V4b daily 50/200 golden cross +stop (5bps)",
                                daily, e50200, x50200, FEE_LOW))
 
+    # ---- V5: LTCG strategy (50/200 golden cross + 5-day breakdown exit, no stop) ----
+    # audit 2026-07-27: tax-efficient strategy targeting LTCG treatment
+    d = daily.copy()
+    d["sma200"] = d["Close"].rolling(200).mean()
+    d["sma50"] = d["Close"].rolling(50).mean()
+    # Entry: 50/200 golden cross
+    ltcg_entry = ((d["sma50"] > d["sma200"]) & (d["sma50"].shift(1) <= d["sma200"].shift(1))).fillna(False)
+    # Exit: close < 200DMA for 5+ consecutive days
+    below_dma = d["Close"] < d["sma200"]
+    d["below_count"] = below_dma.rolling(5).sum()
+    ltcg_exit = (d["below_count"] >= 5).fillna(False)
+    results.append(run_variant("V5 LTCG 50/200 cross + 5-day breakdown (5bps)",
+                               daily, ltcg_entry, ltcg_exit, FEE_LOW, stop=-1.0))
+    results.append(run_variant("V5 LTCG (12bps RT)",
+                               daily, ltcg_entry, ltcg_exit, FEE_HI, stop=-1.0))
+
     # ---- output ----
     cols = ["variant", "total_return_pct", "cagr_pct", "max_drawdown_pct",
             "trades", "win_rate_pct", "profit_factor", "sharpe",

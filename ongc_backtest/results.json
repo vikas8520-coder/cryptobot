@@ -1,0 +1,142 @@
+{
+  "data": "ONGC_daily.csv",
+  "start": "2006-01-01",
+  "fee": 0.00125,
+  "stcg": 0.208,
+  "ltcg": 0.0,
+  "div_drag": 0.0165,
+  "results": [
+    {
+      "variant": "B&H (20y)",
+      "total_return_pct": 183.15,
+      "cagr_pct": 5.19,
+      "max_dd_pct": -79.29,
+      "trades": 0,
+      "trades_per_yr": 0.0,
+      "win_rate_pct": 0,
+      "ltcg_pct": 0,
+      "avg_hold_days": 0
+    },
+    {
+      "variant": "V1 CURRENT SMA20/50+200DMA (20y)",
+      "total_return_pct": 0.78,
+      "cagr_pct": 0.04,
+      "max_dd_pct": -57.61,
+      "trades": 29,
+      "trades_per_yr": 1.41,
+      "win_rate_pct": 31.0,
+      "ltcg_pct": 0.0,
+      "avg_hold_days": 72.0
+    },
+    {
+      "variant": "V2 Monthly 200DMA trend (20y)",
+      "total_return_pct": 60.78,
+      "cagr_pct": 2.34,
+      "max_dd_pct": -64.07,
+      "trades": 21,
+      "trades_per_yr": 1.02,
+      "win_rate_pct": 52.4,
+      "ltcg_pct": 9.5,
+      "avg_hold_days": 194.0
+    },
+    {
+      "variant": "B&H (15y)",
+      "total_return_pct": 64.82,
+      "cagr_pct": 3.25,
+      "max_dd_pct": -79.07,
+      "trades": 0,
+      "trades_per_yr": 0.0,
+      "win_rate_pct": 0,
+      "ltcg_pct": 0,
+      "avg_hold_days": 0
+    },
+    {
+      "variant": "V1 CURRENT SMA20/50+200DMA (15y)",
+      "total_return_pct": 66.94,
+      "cagr_pct": 3.35,
+      "max_dd_pct": -29.66,
+      "trades": 18,
+      "trades_per_yr": 1.16,
+      "win_rate_pct": 33.3,
+      "ltcg_pct": 0.0,
+      "avg_hold_days": 82.0
+    },
+    {
+      "variant": "V2 Monthly 200DMA trend (15y)",
+      "total_return_pct": 143.2,
+      "cagr_pct": 5.88,
+      "max_dd_pct": -45.87,
+      "trades": 12,
+      "trades_per_yr": 0.77,
+      "win_rate_pct": 41.7,
+      "ltcg_pct": 16.7,
+      "avg_hold_days": 248.0
+    },
+    {
+      "variant": "B&H (10y)",
+      "total_return_pct": 108.93,
+      "cagr_pct": 7.21,
+      "max_dd_pct": -70.6,
+      "trades": 0,
+      "trades_per_yr": 0.0,
+      "win_rate_pct": 0,
+      "ltcg_pct": 0,
+      "avg_hold_days": 0
+    },
+    {
+      "variant": "V1 CURRENT SMA20/50+200DMA (10y)",
+      "total_return_pct": 50.11,
+      "cagr_pct": 3.92,
+      "max_dd_pct": -28.52,
+      "trades": 11,
+      "trades_per_yr": 1.04,
+      "win_rate_pct": 36.4,
+      "ltcg_pct": 0.0,
+      "avg_hold_days": 95.0
+    },
+    {
+      "variant": "V2 Monthly 200DMA trend (10y)",
+      "total_return_pct": 106.69,
+      "cagr_pct": 7.11,
+      "max_dd_pct": -41.94,
+      "trades": 7,
+      "trades_per_yr": 0.66,
+      "win_rate_pct": 28.6,
+      "ltcg_pct": 28.6,
+      "avg_hold_days": 303.0
+    },
+    {
+      "variant": "B&H (5y)",
+      "total_return_pct": 223.65,
+      "cagr_pct": 23.46,
+      "max_dd_pct": -35.66,
+      "trades": 0,
+      "trades_per_yr": 0.0,
+      "win_rate_pct": 0,
+      "ltcg_pct": 0,
+      "avg_hold_days": 0
+    },
+    {
+      "variant": "V1 CURRENT SMA20/50+200DMA (5y)",
+      "total_return_pct": 34.11,
+      "cagr_pct": 5.41,
+      "max_dd_pct": -28.52,
+      "trades": 6,
+      "trades_per_yr": 1.08,
+      "win_rate_pct": 33.3,
+      "ltcg_pct": 0.0,
+      "avg_hold_days": 115.0
+    },
+    {
+      "variant": "V2 Monthly 200DMA trend (5y)",
+      "total_return_pct": 69.84,
+      "cagr_pct": 9.98,
+      "max_dd_pct": -30.96,
+      "trades": 3,
+      "trades_per_yr": 0.54,
+      "win_rate_pct": 33.3,
+      "ltcg_pct": 33.3,
+      "avg_hold_days": 394.0
+    }
+  ]
+}

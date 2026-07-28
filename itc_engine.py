@@ -34,8 +34,8 @@ import time
 from datetime import datetime, timezone
 
 import apex_api            # config-driven freqtrade-dialect shim, reused as-is
-import div_strategy        # instrument-agnostic SMA-cross + 200-DMA filter, reused as-is
 import itc_store
+import ltcg_div_strategy   # tax-efficient monthly dividend capture strategy
 from state_io import save_json
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -103,7 +103,8 @@ class EngineState:
         self.cycles = 0
         self.last_cycle = 0.0
         self._lock = threading.RLock()
-        self.strategy = div_strategy.DividendStrategy(config)
+        # Use tax-efficient LTCG dividend strategy (monthly 10-MA with LTCG-aware exit)
+        self.strategy = ltcg_div_strategy.LTCGDivStrategy(config)
         # Idempotence key set for dividend credits: "YYYY-MM-DD:<trade_id>". Without it the
         # 5s cycle loop would re-credit the same payout every tick all ex-date long.
         self.dividends_paid = set()

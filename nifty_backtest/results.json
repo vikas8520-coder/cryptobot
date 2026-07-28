@@ -138,6 +138,30 @@
       "avg_hold_bars": 149.6,
       "time_in_market_pct": 38.0,
       "variant": "V4b daily 50/200 golden cross +stop (5bps)"
+    },
+    {
+      "total_return_pct": 140.35,
+      "cagr_pct": 5.12,
+      "max_drawdown_pct": -23.18,
+      "trades": 11,
+      "win_rate_pct": 45.5,
+      "profit_factor": 5.96,
+      "sharpe": 0.6,
+      "avg_hold_bars": 218.1,
+      "time_in_market_pct": 55.4,
+      "variant": "V5 LTCG 50/200 cross + 5-day breakdown (5bps)"
+    },
+    {
+      "total_return_pct": 139.82,
+      "cagr_pct": 5.11,
+      "max_drawdown_pct": -23.23,
+      "trades": 11,
+      "win_rate_pct": 45.5,
+      "profit_factor": 5.92,
+      "sharpe": 0.6,
+      "avg_hold_bars": 218.1,
+      "time_in_market_pct": 55.4,
+      "variant": "V5 LTCG (12bps RT)"
     }
   ]
 }

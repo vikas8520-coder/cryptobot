@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 
 import apex_api            # config-driven freqtrade-dialect shim, reused as-is
 import nifty_store
-import spx_strategy        # instrument-agnostic SMA-cross strategy, reused as-is
+import ltcg_strategy     # tax-efficient long-term swing trading strategy
 from state_io import save_json
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -94,7 +94,8 @@ class EngineState:
         self.cycles = 0
         self.last_cycle = 0.0
         self._lock = threading.RLock()
-        self.strategy = spx_strategy.SpxStrategy(config)
+        # Use tax-efficient LTCG strategy for long-term swing trading
+        self.strategy = ltcg_strategy.LTCGStrategy(config)
         self.next_trade_id = nifty_store.max_trade_id() + 1
         for row in nifty_store.load_open_trades():
             try:
