@@ -1,0 +1,94 @@
+{
+  "generated_from": [
+    "BTC_USD_3y.csv"
+  ],
+  "fee_side": 0.0005,
+  "tds": 0.01,
+  "tax_rate": 0.3,
+  "results": [
+    {
+      "total_return_pct": 85.12,
+      "cagr_pct": 22.78,
+      "max_drawdown_pct": -56.7,
+      "trades": 1,
+      "win_rate_pct": 100.0,
+      "profit_factor": "inf",
+      "sharpe": 0.55,
+      "avg_hold_bars": 1095.0,
+      "gross_total_ret_pct": 123.03,
+      "net_total_ret_pct": 85.12,
+      "tax_drag_pct": 37.91,
+      "variant": "B&H BTC (after-tax)"
+    },
+    {
+      "total_return_pct": 18.47,
+      "cagr_pct": 5.81,
+      "max_drawdown_pct": -32.12,
+      "trades": 14,
+      "win_rate_pct": 42.9,
+      "profit_factor": 3.48,
+      "sharpe": 0.28,
+      "avg_hold_bars": 37.8,
+      "gross_total_ret_pct": 16.25,
+      "net_total_ret_pct": 17.84,
+      "tax_drag_pct": -1.59,
+      "variant": "Faber 10-month SMA long-flat (after-tax)"
+    },
+    {
+      "total_return_pct": 32.51,
+      "cagr_pct": 9.84,
+      "max_drawdown_pct": -32.76,
+      "trades": 14,
+      "win_rate_pct": 35.7,
+      "profit_factor": 4.38,
+      "sharpe": 0.37,
+      "avg_hold_bars": 37.4,
+      "gross_total_ret_pct": 28.66,
+      "net_total_ret_pct": 30.4,
+      "tax_drag_pct": -1.74,
+      "variant": "200DMA braked-hold (after-tax)"
+    },
+    {
+      "total_return_pct": 19.53,
+      "cagr_pct": 6.13,
+      "max_drawdown_pct": -38.36,
+      "trades": 2,
+      "win_rate_pct": 50.0,
+      "profit_factor": 20.74,
+      "sharpe": 0.29,
+      "avg_hold_bars": 318.5,
+      "gross_total_ret_pct": 25.61,
+      "net_total_ret_pct": 19.74,
+      "tax_drag_pct": 5.87,
+      "variant": "12-month TSMOM long-flat (after-tax)"
+    },
+    {
+      "total_return_pct": -1.99,
+      "cagr_pct": -0.67,
+      "max_drawdown_pct": -2.47,
+      "trades": 2,
+      "win_rate_pct": 0.0,
+      "profit_factor": 0.0,
+      "sharpe": -0.52,
+      "avg_hold_bars": 1.5,
+      "gross_total_ret_pct": -10.0,
+      "net_total_ret_pct": -2.0,
+      "tax_drag_pct": -8.0,
+      "variant": "200DMA braked-hold +5% stop (after-tax)"
+    },
+    {
+      "total_return_pct": -4.53,
+      "cagr_pct": -4.54,
+      "max_drawdown_pct": -7.24,
+      "trades": 5,
+      "win_rate_pct": 0.0,
+      "profit_factor": 0.0,
+      "sharpe": -0.46,
+      "avg_hold_bars": 3.6,
+      "gross_total_ret_pct": -10.67,
+      "net_total_ret_pct": -4.61,
+      "tax_drag_pct": -6.06,
+      "variant": "200DMA braked-hold BTC/INR (after-tax)"
+    }
+  ]
+}

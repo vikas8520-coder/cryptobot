@@ -1,0 +1,36 @@
+{
+  "strategy": {
+    "total_return_pct": 0.0,
+    "cagr_pct": 0.0,
+    "max_drawdown_pct": 0.0,
+    "trades": 0,
+    "win_rate_pct": 0.0,
+    "profit_factor": 0.0,
+    "sharpe": 0.0,
+    "avg_hold_bars": 0.0,
+    "gross_total_ret_pct": 0,
+    "net_total_ret_pct": 0,
+    "tax_drag_pct": 0,
+    "variant": "BrakedHoldV2 (BTC/USDT, after-tax)"
+  },
+  "dca_benchmark": {
+    "total_return_pct": -1.0,
+    "cagr_pct": -1.0,
+    "max_drawdown_pct": -42.28,
+    "trades": 1,
+    "win_rate_pct": 0.0,
+    "profit_factor": 0.0,
+    "sharpe": 0.19,
+    "avg_hold_bars": 364.0,
+    "gross_total_ret_pct": -21.71,
+    "net_total_ret_pct": -1.0,
+    "tax_drag_pct": -20.71,
+    "variant": "DCA-into-BTC benchmark (BTC/USDT, after-tax)"
+  },
+  "bars": 365,
+  "pair": "BTC/USDT",
+  "date_range": [
+    "2025-07-24",
+    "2026-07-23"
+  ]
+}
