@@ -1,0 +1,30 @@
+{
+  "strategy_name": "SolRSI2_1h",
+  "params": {
+    "roi": {
+      "0": 0.02,
+      "360": 0.005,
+      "720": 0.0
+    },
+    "stoploss": {
+      "stoploss": -0.04
+    },
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.015,
+      "trailing_stop_positive_offset": 0.02,
+      "trailing_only_offset_is_reached": true
+    },
+    "max_open_trades": {
+      "max_open_trades": 1
+    },
+    "buy": {
+      "rsi_buy": 9
+    },
+    "sell": {
+      "rsi_exit": 52
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-07-28 22:56:37.854896+00:00"
+}
