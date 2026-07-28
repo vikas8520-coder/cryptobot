@@ -1,10 +1,8 @@
 {
     "$schema": "https://schema.freqtrade.io/schema.json",
-    "max_open_trades": 2,
+    "max_open_trades": 1,
     "stoploss": -0.99,
     "trailing_stop": false,
-    "trailing_stop_positive": 0.03,
-    "trailing_stop_positive_offset": 0.06,
     "stake_currency": "USDT",
     "stake_amount": 100,
     "tradable_balance_ratio": 0.99,
@@ -39,10 +37,7 @@
         "ccxt_config": {},
         "ccxt_async_config": {},
         "pair_whitelist": [
-            "LINK/USDT:USDT",
-            "AVAX/USDT:USDT",
-            "LTC/USDT:USDT",
-            "ADA/USDT:USDT"
+            "ETH/USDT:USDT"
         ],
         "pair_blacklist": []
     },
@@ -54,20 +49,20 @@
     "api_server": {
         "enabled": true,
         "listen_ip_address": "127.0.0.1",
-        "listen_port": 8081,
+        "listen_port": 8092,
         "verbosity": "error",
         "enable_openapi": true,
         "CORS_origins": [],
         "username": "freqtrader"
     },
-    "bot_name": "cryptobot-futures-dryrun",
+    "bot_name": "cryptobot-eth-futures-dryrun",
     "initial_state": "running",
     "force_entry_enable": false,
     "internals": {
         "process_throttle_secs": 5
     },
     "add_config_files": [
-        "config_futures.secret.json"
+        "config_eth_futures.secret.json"
     ],
     "trailing_only_offset_is_reached": false
 }

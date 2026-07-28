@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-27a"
+DASH_VERSION = "2026-07-28a"
 import csv
 from local_secrets import api_pw
 import json
@@ -144,9 +144,10 @@ def max_dd_for(name, balance, prof, eq_hist):
 
 BOTS = [
     ("Spot", 8080, api_pw(8080), "Trend-follow · spot · STAR live (backtest +41% PF1.19)"),
-    ("Futures", 8081, api_pw(8081), "Long/short · futures · BROKEN (WF 35% -> drop; 1d brake candidate)"),
+    ("Futures", 8081, api_pw(8081), "Short-only · 4h · funding harvest (backtest +24% PF1.56 DD8% net of funding, 6yr)"),
+    ("ETH Futures", 8092, api_pw(8092), "Short-only ETH · 4h · ETH-tuned ADX30/CONF4 (backtest +11% PF1.92 DD3% net of funding, 6yr)"),
     ("Braked Hold", 8082, api_pw(8082), "200-day brake · spot · WINNER (backtest +1219% PF11)"),
-    ("Scalp", 8083, api_pw(8083), "VWAP reversion · 5m · BROKEN (drop; -66% even fee-free)"),
+    ("Scalp", 8083, api_pw(8083), "BB squeeze breakout · 4h · 9 pairs (backtest +11% PF1.40 DD3% net of fees, 6yr)"),
     ("Day Trade", 8084, api_pw(8084), "ORB breakout · 1h · BROKEN (restarted; -90% backtest)"),
     # ApeX removed 2026-07-23: synthetic-only paper engine whose balance inflated the
     # real-money headline to +2641%/$301k (synthetic price-path bug, not real capital).
