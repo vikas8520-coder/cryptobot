@@ -1283,8 +1283,8 @@ function spark(vals){
    longer overflow the viewport, and the numbers line up column-wise so bots can
    be compared against each other instead of read one card at a time. */
 const BOT_GROUPS=[
-  ["Crypto",     ["Futures","Braked Hold"]],
-  ["Short-term", ["Scalp","Day Trade"]],
+  ["Crypto",     ["Futures","ETH Futures","Braked Hold"]],
+  ["Short-term", ["Scalp"]],
   ["Paper equity", ["S&P 500","Nifty 50","ONGC","ITC","BTC"]],
 ];
 const botOpen=new Set();   // expanded rows, kept across the live re-render

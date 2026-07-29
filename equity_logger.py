@@ -27,15 +27,20 @@ CSVF = os.path.join(BASE, "equity_history.csv")
 STATE = os.path.join(BASE, "equity_logger_state.json")
 BRAKE_STATE = os.path.join(BASE, "brake_alert_state.json")
 START = 1000.0
-BOTS = [("spot", 8080, api_pw(8080)), ("futures", 8081, api_pw(8081)),
-        ("brakedhold", 8082, api_pw(8082)), ("apex", 8085, api_pw(8085)),
+# 2026-07-28: spot (8080) parked, apex (8085) killed — removed. eth_futures
+# (8092) added. scalp (8083) was never logged here (separate sol_scalp DB);
+# adding it would require a Freqtrade balance endpoint check — left for now.
+BOTS = [("futures", 8081, api_pw(8081)),
+        ("brakedhold", 8082, api_pw(8082)),
+        ("eth_futures", 8092, api_pw(8092)),
         ("spx", 8086, api_pw(8086)), ("nifty", 8087, api_pw(8087)),
         ("ongc", 8088, api_pw(8088)), ("itc", 8089, api_pw(8089)),
         ("btc", 8091, api_pw(8091))]   # 8091, NOT 8090 — 8090 is the dashboard
 BASKET = ["BTC", "ETH", "SOL", "XRP", "ADA", "LTC",
           "DOGE", "LINK", "BNB", "AVAX", "DOT", "TRX"]
+# spot/apex columns kept in FIELDS for CSV backward compat (will be blank going forward)
 FIELDS = ["date", "spot", "futures", "brakedhold", "apex", "spx", "nifty", "ongc", "itc",
-          "btc", "btc_hold", "basket_hold"]
+          "btc", "btc_hold", "basket_hold", "eth_futures"]
 # "btc" (the paper BOT's equity) is a different series from "btc_hold" (the buy-and-hold
 # benchmark) — the bot is exactly what btc_hold is the control for. Do not merge them.
 

@@ -33,9 +33,12 @@ STATE = "/Users/vikasreddy/cryptobot/guard_state.json"
 # and the guardian consumes it at the top of its cycle.
 RESET_REQ = "/Users/vikasreddy/cryptobot/guard_reset_request.json"
 
-SPOT = ("Spot", 8080, api_pw(8080))
+# 2026-07-28: Spot bot parked (edge expired 2024). The concentration rule
+# (Rule 2) that coordinated Spot+Futures is now dead code — removed. The
+# guardian now guards Futures alone (circuit breaker + exposure caps).
+# Expanding scope to other bots is a separate design decision.
 FUTURES = ("Futures", 8081, api_pw(8081))
-BOTS = [SPOT, FUTURES]
+BOTS = [FUTURES]
 
 POLL = 15                 # seconds between portfolio checks
 MAX_TOTAL_OPEN = 4        # cap on NUMBER of combined open trades
@@ -206,27 +209,11 @@ def main():
                     send(f"▶️ GUARDIAN: back under limits ({total_open} trades, "
                          f"${total_stake:.0f} exposure). Resumed entries on both bots.")
 
-                # ---- RULE 2: concentration -> auto-close futures duplicate ----
-                spot_longs = {coin(t["pair"]) for t in statuses["Spot"] if not t.get("is_short")}
-                fut_trades = statuses["Futures"]
-                fut_longs = {coin(t["pair"]) for t in fut_trades if not t.get("is_short")}
-                concentrated = spot_longs & fut_longs
-                now = time.time()
-                for c in sorted(concentrated):
-                    if now - cooldown.get(c, 0) < CONC_COOLDOWN:
-                        continue
-                    ft = next((t for t in fut_trades
-                               if coin(t["pair"]) == c and not t.get("is_short")
-                               and (t.get("amount") or 0) > 0), None)
-                    if not ft:
-                        continue
-                    r = api_post(FUTURES[1], FUTURES[2], "forceexit", {"tradeid": str(ft["trade_id"])})
-                    if r.get("error"):
-                        print("forceexit failed, will retry:", r["error"], flush=True)
-                        continue
-                    cooldown[c] = now
-                    send(f"⚠️➡️✅ GUARDIAN: both bots were LONG {c} (concentration). "
-                         f"Auto-closed the futures leg #{ft['trade_id']}. Kept the spot position.")
+                # ---- RULE 2: REMOVED 2026-07-28 ----
+                # Was: concentration check (Spot+Futures both long same coin).
+                # Spot bot parked (edge expired 2024), so the rule is dead code.
+                # The cooldown dict is kept in state for backward compat but no
+                # longer populated.
 
             if not save_json(STATE, {"paused_by_guard": paused, "cooldown": cooldown,
                                      "peak_balance": peak, "breaker_tripped": tripped}):
