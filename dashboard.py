@@ -461,11 +461,25 @@ def overview():
     n_reporting = sum(1 for x in bots if x.get("has_balance"))
     start_total = sum(x.get("start_usd", 0) for x in bots if x.get("has_balance"))
     missing = [x["name"] for x in bots if not x.get("has_balance")]
+
+    # equal-weighted average P&L% — each bot counts 1/n regardless of capital
+    eq_pcts = []
+    for x in bots:
+        if x.get("has_balance"):
+            bal_usd = paper_fx.to_usd(x["balance"], x.get("currency", "USD"))
+            start = x.get("start_usd", 0)
+            if start:
+                eq_pcts.append((bal_usd / start - 1) * 100)
+    equal_weighted_pct = sum(eq_pcts) / len(eq_pcts) if eq_pcts else 0
+
+    usdinr = paper_fx.get_usdinr()
     return JSONResponse({
         "bots": bots,
         "total_balance": tot_bal,
         "total_currency": "USD",   # [PAPER EQUITY] INR bots converted -> honest combined $
         "total_pnl_pct": (tot_bal / start_total - 1) * 100 if start_total else 0,
+        "equal_weighted_pct": equal_weighted_pct,
+        "usdinr_rate": usdinr,
         "bots_reporting": n_reporting, "bots_missing": missing,
         "guardian": {
             "tripped": bool(g.get("breaker_tripped", False)),
@@ -814,7 +828,7 @@ PAGE = r"""<!doctype html>
 </style></head>
 <body>
 <div class="wrap">
-  <header>
+<header>
     <div class="brand">
       <svg class="glyph" viewBox="0 0 32 32" fill="none" aria-hidden="true">
         <circle cx="16" cy="16" r="14" stroke="#26314A" stroke-width="2"/>
@@ -827,8 +841,9 @@ PAGE = r"""<!doctype html>
     <div class="totals">
       <div class="t"><span class="label">Combined equity</span>
         <span class="big" id="tbal">—</span></div>
-      <div class="t"><span class="label">Total P&amp;L</span>
-        <span class="big" id="tpnl">—</span></div>
+      <div class="t"><span class="label">Total P&L</span>
+        <span class="big" id="tpnl">—</span>
+        <div id="tpnl_sub" class="mono" style="font-size:11px;margin-top:2px;color:var(--muted)"></div></div>
       <div class="t"><span class="label">Status</span>
         <span class="live"><i class="dot pulse" id="livedot"></i><span id="upd">connecting…</span></span></div>
     </div>
@@ -1619,6 +1634,11 @@ async function tick(){
     $("tbal").textContent=money(d.total_balance)+(miss.length?` (${d.bots_reporting} of ${d.bots.length} bots)`:"");
     $("tpnl").textContent=miss.length?pct(d.total_pnl_pct)+" · partial — "+miss.join(", ")+" offline":pct(d.total_pnl_pct);
     $("tpnl").className="big "+cls(d.total_pnl_pct);
+    // equal-weighted sub-line + INR rate note
+    const eq=d.equal_weighted_pct;
+    const fx=d.usdinr_rate;
+    $("tpnl_sub").textContent=`Equal-weighted: ${pct(eq)}  ·  INR bots converted at ₹${fx.toFixed(2)}/USD`;
+    $("tpnl_sub").className="mono "+cls(eq);
     $("upd").textContent="live · "+new Date().toLocaleTimeString();
 
     // guardian
