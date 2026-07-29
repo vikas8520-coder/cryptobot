@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-28a"
+DASH_VERSION = "2026-07-29a"
 import csv
 from local_secrets import api_pw
 import json
@@ -493,6 +493,103 @@ def overview():
         "equity_history": eq_hist,
     })
 
+# ---- backtest results panel -------------------------------------------------
+# Reads the static result JSONs from nifty_backtest/. These are offline research
+# artifacts (not live state), so they're served from a separate endpoint and
+# loaded once on page load — not polled every 15s like /api/overview.
+BACKTEST_DIR = os.path.join(BASE, "nifty_backtest")
+
+# (filename, display title, sort order). Each file is a self-contained result
+# set; the panel groups them under their title. Sort order controls panel order.
+BACKTEST_FILES = [
+    ("btc_faber_results.json",            "BTC 200DMA · 3-year after-tax",        0),
+    ("backtest_india_tax_results.json",   "BrakedHoldV2 · 1-year India after-tax", 1),
+    ("walkforward_results.json",          "Nifty 200DMA · walk-forward validated",  2),
+    ("results.json",                      "Nifty SMA cross · full history",         3),
+    ("equity_tax_model_results.json",     "Indian equity · after-tax by regime",    4),
+]
+
+
+def _safe_num(v):
+    """Coerce a backtest metric to float; 'inf' -> None (can't JSON-serialize
+    and the UI shows '∞' instead). Strings/None pass through as-is."""
+    if v is None:
+        return None
+    if isinstance(v, str):
+        return None if v == "inf" else v
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return float(v) if v != float("inf") else None
+    return None
+
+
+def _normalize_result(r):
+    """Pull the common metrics out of a result dict, tolerating the slightly
+    different schemas the various backtest scripts produce."""
+    return {
+        "variant":   r.get("variant", r.get("strategy", "?")),
+        "total_ret": _safe_num(r.get("total_return_pct", r.get("aftertax_total_pct"))),
+        "cagr":      _safe_num(r.get("cagr_pct", r.get("aftertax_cagr_pct"))),
+        "max_dd":    _safe_num(r.get("max_drawdown_pct")),
+        "trades":    r.get("trades", 0),
+        "win_rate":  _safe_num(r.get("win_rate_pct")),
+        "pf":        _safe_num(r.get("profit_factor")),
+        "sharpe":    _safe_num(r.get("sharpe")),
+        "tax_drag":  _safe_num(r.get("tax_drag_pct")),
+        "avg_hold":  _safe_num(r.get("avg_hold_bars", r.get("avg_hold_days"))),
+    }
+
+
+@app.get("/api/backtests")
+def backtests():
+    """Static backtest result sets from nifty_backtest/*.json. Loaded once on
+    page load — not polled. Returns a list of {title, order, meta, results}."""
+    out = []
+    for fname, title, order in BACKTEST_FILES:
+        path = os.path.join(BACKTEST_DIR, fname)
+        if not os.path.exists(path):
+            continue
+        try:
+            raw = json.load(open(path))
+        except Exception:
+            continue
+        # multiple schemas: a flat list of variants under "results", a structured
+        # dict with "strategy" (dict) + "dca_benchmark" (backtest_india_tax),
+        # or a walkforward dict with "in_sample_reference" + "clean_holdout".
+        # Check most-specific first — walkforward also has a "strategy" key but
+        # it's a string description, not a result dict.
+        meta = {}
+        results = []
+        if isinstance(raw, dict) and "in_sample_reference" in raw:
+            # walkforward: in_sample_reference + clean_holdout{in_sample, oos}
+            meta = {"strategy": raw.get("strategy", "")}
+            ho = raw.get("clean_holdout", {})
+            results = [
+                {**_normalize_result(ho.get("in_sample", {})),
+                 "variant": "In-sample (2009-2022)"},
+                {**_normalize_result(ho.get("oos", {})),
+                 "variant": "Out-of-sample (2023-2026)"},
+            ]
+        elif isinstance(raw, dict) and "results" in raw:
+            meta = {k: v for k, v in raw.items() if k != "results"
+                    and not isinstance(v, (list, dict))}
+            results = [_normalize_result(r) for r in raw["results"]
+                       if isinstance(r, dict)]
+        elif isinstance(raw, dict) and "strategy" in raw \
+                and isinstance(raw.get("strategy"), dict):
+            # backtest_india_tax: strategy (dict) + dca_benchmark + metadata
+            meta = {k: v for k, v in raw.items()
+                    if k not in ("strategy", "dca_benchmark")
+                    and not isinstance(v, (list, dict))}
+            results = [_normalize_result(raw["strategy"]),
+                       _normalize_result(raw["dca_benchmark"])]
+        elif isinstance(raw, list):
+            results = [_normalize_result(r) for r in raw if isinstance(r, dict)]
+        if results:
+            out.append({"title": title, "order": order, "meta": meta,
+                        "results": results})
+    out.sort(key=lambda x: x["order"])
+    return JSONResponse(out)
+
 
 @app.get("/api/brake/live")
 def brake_live():
@@ -818,6 +915,28 @@ PAGE = r"""<!doctype html>
   .eqempty{font-family:var(--mono);font-size:13px;color:var(--faint);padding:34px 0;text-align:center;}
 
   .err{font-family:var(--mono);font-size:13px;color:var(--brick);padding:16px 0;}
+
+  /* ---- backtest lab panel ---- */
+  .btgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;}
+  .btcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .btcard .bthead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
+  .btcard .bthead h3{font-size:14px;font-weight:700;margin:0;}
+  .btcard .btmeta{font-family:var(--mono);font-size:10.5px;color:var(--faint);}
+  .btcard .btmeta span{margin-right:8px;}
+  .bttable{width:100%;border-collapse:collapse;font-size:12px;}
+  .bttable th{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);text-align:right;padding:4px 6px;border-bottom:1px solid var(--line);}
+  .bttable th:first-child{text-align:left;}
+  .bttable td{padding:5px 6px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;
+    text-align:right;font-family:ui-monospace,Menlo,monospace;}
+  .bttable td:first-child{text-align:left;font-family:inherit;font-weight:600;max-width:180px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .bttable tr:last-child td{border-bottom:none;}
+  .bttable .pos{color:var(--teal);}
+  .bttable .neg{color:var(--brick);}
+  .bttable .bench{color:var(--muted);font-style:italic;}
+  .bttable .inf{color:var(--faint);}
+
   /* narrow screens: shed the least-load-bearing columns (sparkline, trades, win)
      rather than let the row wrap — balance and P&L are the two that must survive */
   @media(max-width:900px){.board{grid-template-columns:repeat(3,1fr);}
@@ -963,6 +1082,12 @@ PAGE = r"""<!doctype html>
       <div class="mem" id="memory"></div>
     </div>
   </div>
+
+  <div class="brakehead" style="margin-top:26px">
+    <h2 class="sec">Backtest lab · after-tax research</h2>
+    <span class="label" style="color:var(--faint)">offline · static results</span>
+  </div>
+  <div class="btgrid" id="backtests"></div>
 
   <div class="err" id="err" hidden></div>
 </div>
@@ -1620,6 +1745,71 @@ function drawEquityChart(hist){
   });
   ctx.setLineDash([]);
 }
+
+// ---- backtest lab: load once on page load (static data, not polled) ----
+function fmtPct(v){return v==null?"—":(v>=0?"+":"")+v.toFixed(1)+"%";}
+function fmtNum(v,d=2){return v==null?"—":v.toFixed(d);}
+function fmtInf(v,d=2){return v==null?"∞":v.toFixed(d);}
+function fmtInt(v){return v==null?"—":String(v);}
+function btClass(v){return v==null?"inf":v>=0?"pos":"neg";}
+
+async function loadBacktests(){
+  try{
+    const r=await fetch("/api/backtests",{cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const panels=await r.json();
+    if(!panels.length){
+      $("backtests").innerHTML=`<div class="none mono" style="color:var(--faint);padding:12px 4px">no backtest result files found</div>`;
+      return;
+    }
+    $("backtests").innerHTML=panels.map(p=>{
+      // meta line: date range, bars, pair, fee, tax rate — whatever the file exposes
+      const m=p.meta||{};
+      const metaBits=[];
+      if(m.pair) metaBits.push(m.pair);
+      if(m.bars) metaBits.push(m.bars+" bars");
+      if(m.date_range && Array.isArray(m.date_range)) metaBits.push(m.date_range[0]+" → "+m.date_range[1]);
+      if(m.years) metaBits.push(m.years+"y");
+      if(m.fee_side!=null) metaBits.push("fee "+(m.fee_side*100).toFixed(2)+"%");
+      if(m.tds!=null) metaBits.push("TDS "+(m.tds*100).toFixed(0)+"%");
+      if(m.tax_rate!=null) metaBits.push("tax "+(m.tax_rate*100).toFixed(0)+"%");
+      const metaHtml=metaBits.length?`<div class="btmeta">${metaBits.map(b=>`<span>${b}</span>`).join("")}</div>`:"";
+
+      const rows=p.results.map(r=>{
+        // highlight benchmark rows (B&H, DCA) with muted styling
+        const isBench=/^(B&H|DCA|Buy & Hold|Benchmark)/i.test(r.variant||"");
+        const vc=isBench?"bench":"";
+        const cagrC=btClass(r.cagr);
+        const ddC=r.max_dd!=null&&r.max_dd<0?"neg":"inf";
+        const pfC=r.pf==null?"inf":r.pf>=1?"pos":"neg";
+        return `<tr>
+          <td class="${vc}" title="${(r.variant||"").replace(/"/g,"&quot;")}">${r.variant||"—"}</td>
+          <td class="${cagrC}">${fmtPct(r.cagr)}</td>
+          <td class="${ddC}">${fmtPct(r.max_dd)}</td>
+          <td>${fmtInt(r.trades)}</td>
+          <td>${r.win_rate!=null?Math.round(r.win_rate)+"%":"—"}</td>
+          <td class="${pfC}">${fmtInf(r.pf)}</td>
+          <td>${fmtNum(r.sharpe)}</td>
+          <td class="${btClass(r.tax_drag)}">${fmtPct(r.tax_drag)}</td>
+        </tr>`;
+      }).join("");
+
+      return `<div class="btcard">
+        <div class="bthead"><h3>${p.title}</h3></div>
+        ${metaHtml}
+        <table class="bttable">
+          <thead><tr>
+            <th>Variant</th><th>CAGR</th><th>Max DD</th><th>Trades</th><th>Win</th><th>PF</th><th>Sharpe</th><th>Tax drag</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    }).join("");
+  }catch(e){
+    $("backtests").innerHTML=`<div class="none mono" style="color:var(--faint);padding:12px 4px">couldn't load backtests: ${e.message}</div>`;
+  }
+}
+loadBacktests();
 
 let tickBusy=false;             // in-flight guard: a hung bot must not stack requests
 async function tick(){
