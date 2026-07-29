@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-29c"
+DASH_VERSION = "2026-07-29d"
 import csv
 from local_secrets import api_pw
 import json
@@ -918,27 +918,23 @@ PAGE = r"""<!doctype html>
 
   /* ---- backtest lab panel ---- */
   .btgrid{display:grid;grid-template-columns:1fr;gap:20px;}
-  .btcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .btcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0;overflow:hidden;}
   .btcard .bthead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
   .btcard .bthead h3{font-size:16px;font-weight:700;margin:0;}
-  .btcard .btmeta{font-family:var(--mono);font-size:10.5px;color:var(--faint);}
+  .btcard .btmeta{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-bottom:8px;}
   .btcard .btmeta span{margin-right:8px;}
-  .bttable-wrap{overflow-x:auto;}
+  .bttable-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   .bttable{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed;}
   .bttable th{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
-    color:var(--muted);text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);}
-  .bttable th:first-child{text-align:left;width:30%;}
-  .bttable th:nth-child(2){width:14%;}
-  .bttable th:nth-child(3){width:14%;}
-  .bttable th:nth-child(4){width:14%;}
-  .bttable th:nth-child(5){width:14%;}
-  .bttable th:nth-child(6){width:14%;}
-  .bttable td{padding:8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;
-    text-align:right;font-family:ui-monospace,Menlo,monospace;}
-  .bttable td:first-child{text-align:left;font-family:inherit;font-weight:600;max-width:260px;
-    overflow-wrap:anywhere;word-break:break-word;white-space:normal;}
+    color:var(--muted);text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  .bttable th:first-child{text-align:left;width:32%;}
+  .bttable th:nth-child(n+2){width:13.6%;}
+  .bttable td{padding:7px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;
+    text-align:right;font-family:ui-monospace,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .bttable td:first-child{text-align:left;font-family:inherit;font-weight:600;
+    overflow:hidden;text-overflow:ellipsis;white-space:normal;overflow-wrap:break-word;}
   .bttable tr:last-child td{border-bottom:none;}
-  .bttable tbody tr:nth-child(even){background:rgba(38,49,74,0.35);}
+  .bttable tbody tr:nth-child(even){background:var(--surface-2);}
   .bttable .pos{color:var(--teal);}
   .bttable .neg{color:var(--brick);}
   .bttable .bench{color:var(--muted);font-style:italic;}
