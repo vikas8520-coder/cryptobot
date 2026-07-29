@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-29a"
+DASH_VERSION = "2026-07-29b"
 import csv
 from local_secrets import api_pw
 import json
@@ -917,17 +917,17 @@ PAGE = r"""<!doctype html>
   .err{font-family:var(--mono);font-size:13px;color:var(--brick);padding:16px 0;}
 
   /* ---- backtest lab panel ---- */
-  .btgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;}
-  .btcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .btgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+  .btcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow-x:auto;}
   .btcard .bthead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
   .btcard .bthead h3{font-size:14px;font-weight:700;margin:0;}
   .btcard .btmeta{font-family:var(--mono);font-size:10.5px;color:var(--faint);}
   .btcard .btmeta span{margin-right:8px;}
-  .bttable{width:100%;border-collapse:collapse;font-size:12px;}
+  .bttable{width:100%;border-collapse:collapse;font-size:12.5px;}
   .bttable th{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
-    color:var(--muted);text-align:right;padding:4px 6px;border-bottom:1px solid var(--line);}
+    color:var(--muted);text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);}
   .bttable th:first-child{text-align:left;}
-  .bttable td{padding:5px 6px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;
+  .bttable td{padding:8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;
     text-align:right;font-family:ui-monospace,Menlo,monospace;}
   .bttable td:first-child{text-align:left;font-family:inherit;font-weight:600;max-width:180px;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -942,7 +942,8 @@ PAGE = r"""<!doctype html>
   @media(max-width:900px){.board{grid-template-columns:repeat(3,1fr);}
     .botcols{grid-template-columns:10px minmax(110px,2fr) 88px 92px 74px 12px;}
     .botcols .c-spark,.botcols .c-trades,.botcols .c-win{display:none;}
-    .totals{gap:22px;}.totals .big{font-size:21px;}}
+    .totals{gap:22px;}.totals .big{font-size:21px;}
+    .btgrid{grid-template-columns:1fr;}}
   @media(max-width:520px){.board{grid-template-columns:repeat(2,1fr);}}
 </style></head>
 <body>
