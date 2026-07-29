@@ -13,6 +13,11 @@ Watches BOTH and enforces portfolio-level rules via their REST APIs. Priority or
      (hedges left alone; per-coin cooldown to avoid fighting the strategy).
 
 State persisted in guard_state.json; re-read each poll so /reset takes effect.
+
+Scope-change guard (2026-07-29): the sorted BOTS names are stored in state as
+"scope". If BOTS is refactored (a bot dropped or added), the stale peak_balance
+from the old scope would false-trip the breaker — the guardian detects the
+change, re-baselines peak=0, clears the breaker, and announces the scope shift.
 """
 import requests, re, time, os
 from local_secrets import api_pw
@@ -111,6 +116,7 @@ def main():
                 state["breaker_tripped"] = False
                 state["paused_by_guard"] = False
                 state["peak_balance"] = 0.0    # re-baseline high-water mark
+                state["scope"] = sorted(name for name, _, _ in BOTS)
                 dd_breach_count = 0
                 if not save_json(STATE, state):
                     send("⚠️ GUARDIAN: /reset could not be persisted (disk?) — it may "
@@ -123,6 +129,25 @@ def main():
             cooldown = state.get("cooldown", {})
             peak = state.get("peak_balance", 0.0)
             tripped = state.get("breaker_tripped", False)
+
+            # 2026-07-29: scope-change guard. When BOTS is refactored (a bot is
+            # dropped or added), the stale peak_balance from the old scope can
+            # false-trip the breaker — this happened when Spot was parked and the
+            # guardian went from 2-bot to 1-bot scope: peak $1987 vs new $1000 =
+            # 49.7% "drawdown" that was really just a smaller watch list. Store
+            # the sorted bot names in state; if they change, re-baseline peak=0
+            # and clear the breaker so the next poll sets a fresh high-water mark.
+            scope_key = sorted(name for name, _, _ in BOTS)
+            prev_scope = state.get("scope", [])
+            if prev_scope != scope_key:
+                if prev_scope:
+                    send(f"ℹ️ GUARDIAN: watch scope changed ({', '.join(prev_scope)} → "
+                         f"{', '.join(scope_key)}). Re-baselining peak and clearing breaker "
+                         f"to avoid a false drawdown trip from the old scope's high-water mark.")
+                peak = 0.0
+                tripped = False
+                paused = False
+                dd_breach_count = 0
 
             statuses, balances, offline = {}, {}, False
             for name, port, pw in BOTS:
@@ -216,7 +241,8 @@ def main():
                 # longer populated.
 
             if not save_json(STATE, {"paused_by_guard": paused, "cooldown": cooldown,
-                                     "peak_balance": peak, "breaker_tripped": tripped}):
+                                     "peak_balance": peak, "breaker_tripped": tripped,
+                                     "scope": scope_key}):
                 # a lost write can silently lose a fresh breaker-trip — make it loud
                 print("GUARDIAN: guard_state.json write FAILED — state not persisted "
                       "this cycle", flush=True)
