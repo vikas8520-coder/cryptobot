@@ -12,7 +12,7 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-29b"
+DASH_VERSION = "2026-07-29c"
 import csv
 from local_secrets import api_pw
 import json
@@ -917,21 +917,28 @@ PAGE = r"""<!doctype html>
   .err{font-family:var(--mono);font-size:13px;color:var(--brick);padding:16px 0;}
 
   /* ---- backtest lab panel ---- */
-  .btgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
-  .btcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow-x:auto;}
-  .btcard .bthead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
-  .btcard .bthead h3{font-size:14px;font-weight:700;margin:0;}
+  .btgrid{display:grid;grid-template-columns:1fr;gap:20px;}
+  .btcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .btcard .bthead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+  .btcard .bthead h3{font-size:16px;font-weight:700;margin:0;}
   .btcard .btmeta{font-family:var(--mono);font-size:10.5px;color:var(--faint);}
   .btcard .btmeta span{margin-right:8px;}
-  .bttable{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .bttable-wrap{overflow-x:auto;}
+  .bttable{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed;}
   .bttable th{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
     color:var(--muted);text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);}
-  .bttable th:first-child{text-align:left;}
+  .bttable th:first-child{text-align:left;width:30%;}
+  .bttable th:nth-child(2){width:14%;}
+  .bttable th:nth-child(3){width:14%;}
+  .bttable th:nth-child(4){width:14%;}
+  .bttable th:nth-child(5){width:14%;}
+  .bttable th:nth-child(6){width:14%;}
   .bttable td{padding:8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;
     text-align:right;font-family:ui-monospace,Menlo,monospace;}
-  .bttable td:first-child{text-align:left;font-family:inherit;font-weight:600;max-width:180px;
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .bttable td:first-child{text-align:left;font-family:inherit;font-weight:600;max-width:260px;
+    overflow-wrap:anywhere;word-break:break-word;white-space:normal;}
   .bttable tr:last-child td{border-bottom:none;}
+  .bttable tbody tr:nth-child(even){background:rgba(38,49,74,0.35);}
   .bttable .pos{color:var(--teal);}
   .bttable .neg{color:var(--brick);}
   .bttable .bench{color:var(--muted);font-style:italic;}
@@ -1790,20 +1797,20 @@ async function loadBacktests(){
           <td>${fmtInt(r.trades)}</td>
           <td>${r.win_rate!=null?Math.round(r.win_rate)+"%":"—"}</td>
           <td class="${pfC}">${fmtInf(r.pf)}</td>
-          <td>${fmtNum(r.sharpe)}</td>
-          <td class="${btClass(r.tax_drag)}">${fmtPct(r.tax_drag)}</td>
         </tr>`;
       }).join("");
 
       return `<div class="btcard">
         <div class="bthead"><h3>${p.title}</h3></div>
         ${metaHtml}
-        <table class="bttable">
-          <thead><tr>
-            <th>Variant</th><th>CAGR</th><th>Max DD</th><th>Trades</th><th>Win</th><th>PF</th><th>Sharpe</th><th>Tax drag</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+        <div class="bttable-wrap">
+          <table class="bttable">
+            <thead><tr>
+              <th>Variant</th><th>CAGR</th><th>Max DD</th><th>Trades</th><th>Win</th><th>PF</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
       </div>`;
     }).join("");
   }catch(e){
