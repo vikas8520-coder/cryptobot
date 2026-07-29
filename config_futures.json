@@ -69,5 +69,10 @@
     "add_config_files": [
         "config_futures.secret.json"
     ],
-    "trailing_only_offset_is_reached": false
+    "trailing_only_offset_is_reached": false,
+    "telegram": {
+        "enabled": true,
+        "token": "",
+        "chat_id": ""
+    }
 }

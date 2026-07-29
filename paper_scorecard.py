@@ -39,17 +39,19 @@ WEEKS_TOO_SLOW = 8             # under min_trades after this many weeks = design
 # min_trades per the 2026-07-23 plan: swing/trend 40, scalp 80, daily-gated 5, paper equity 20.
 # Currency matters: INR ledgers store close_profit_abs in rupees — printing them as $
 # would be the same headline-currency lie the dashboard fix (a3d22d5) killed.
+# 2026-07-28: spot killed (edge expired 2024), daytrade killed (zero-edge).
+# futures DB corrected to shorthold, scalp DB corrected to sol_scalp.
+# eth_futures added (new short-only ETH bot).
 BOTS = [
-    ("spot",      "tradesv3_trendfollow.sqlite", 40, "$"),
-    ("futures",   "tradesv3_futures_ls2.sqlite", 40, "$"),
-    ("daytrade",  "tradesv3_daytrade.sqlite",    40, "$"),
-    ("scalp",     "tradesv3_scalp.sqlite",       80, "$"),
-    ("braked",    "tradesv3_brakedhold.sqlite",   5, "$"),
-    ("spx",       "tradesv3_spx.sqlite",         20, "$"),
-    ("nifty",     "tradesv3_nifty.sqlite",       20, "Rs"),
-    ("ongc",      "tradesv3_ongc.sqlite",        20, "Rs"),
-    ("itc",       "tradesv3_itc.sqlite",         20, "Rs"),
-    ("btc",       "tradesv3_btc.sqlite",         20, "$"),
+    ("futures",   "tradesv3_futures_shorthold.sqlite", 40, "$"),
+    ("eth_futures","tradesv3_eth_futures.sqlite",      40, "$"),
+    ("scalp",     "tradesv3_sol_scalp.sqlite",         80, "$"),
+    ("braked",    "tradesv3_brakedhold.sqlite",         5, "$"),
+    ("spx",       "tradesv3_spx.sqlite",               20, "$"),
+    ("nifty",     "tradesv3_nifty.sqlite",             20, "Rs"),
+    ("ongc",      "tradesv3_ongc.sqlite",              20, "Rs"),
+    ("itc",       "tradesv3_itc.sqlite",               20, "Rs"),
+    ("btc",       "tradesv3_btc.sqlite",               20, "$"),
 ]
 
 
