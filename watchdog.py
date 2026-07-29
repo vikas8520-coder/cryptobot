@@ -42,10 +42,12 @@ API = f"https://api.telegram.org/bot{TOK}"
 # 2026-07-20: futures (OKX) bot brought back for 3-bot data analysis — watch it again.
 # 2026-07-20: added scalp (1m) + daytrade (15m) LAB bots — dry-run proof-of-fee-drag.
 # tradenotifier stays retired (its fills surface in the activity feed instead).
-BOTS = [("Spot", 8080, api_pw(8080)), ("Futures", 8081, api_pw(8081)),
+# 2026-07-28: Spot 8080 parked (edge expired 2024), Day Trade 8084 + ApeX 8085 killed.
+# 2026-07-28: ETH Futures 8092 added.
+BOTS = [("Futures", 8081, api_pw(8081)),
         ("Braked Hold", 8082, api_pw(8082)),
-        ("Scalp", 8083, api_pw(8083)), ("Day Trade", 8084, api_pw(8084)),
-        ("ApeX", 8085, api_pw(8085)),
+        ("Scalp", 8083, api_pw(8083)),
+        ("ETH Futures", 8092, api_pw(8092)),
         ("S&P 500", 8086, api_pw(8086)),
         ("Nifty 50", 8087, api_pw(8087)),
         ("ONGC", 8088, api_pw(8088)), ("ITC", 8089, api_pw(8089)),
@@ -93,6 +95,26 @@ def _brake_job_enabled():
         return False
 
 
+def check_synthetic():
+    """Scan config_*.json for synthetic=true — the bug class that killed ApeX
+    (commit 2ce5225) and Nifty (commit 4337203). A synthetic bot runs on a random
+    walk, not real market data, so its P&L is meaningless and it can silently
+    bleed the dry_run wallet. Returns {config_filename: "synthetic=true"} for
+    each offender. config_apex.json is expected to flag (bot is killed) — the
+    alert is a reminder to delete or fix the config.
+    """
+    import glob, json
+    bad = {}
+    for path in sorted(glob.glob(os.path.join(BASE, "config_*.json"))):
+        try:
+            cfg = json.load(open(path))
+            if cfg.get("synthetic") is True:
+                bad[os.path.basename(path)] = "synthetic=true"
+        except Exception:
+            pass    # corrupt config — the bot itself will fail louder
+    return bad
+
+
 def check():
     """Return {problem_key: human_reason} for everything currently broken."""
     broken = {}
@@ -119,6 +141,8 @@ def check():
             broken["brake-data"] = f"stale ({age_h:.1f}h old)"
     elif _brake_job_enabled():
         broken["brake-data"] = "missing"
+    # 2026-07-28: synthetic config guard — catches the ApeX/Nifty bug class.
+    broken.update(check_synthetic())
     return broken
 
 
