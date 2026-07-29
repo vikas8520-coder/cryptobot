@@ -25,13 +25,7 @@
     "entry_pricing": {
         "price_side": "same",
         "use_order_book": true,
-        "order_book_top": 1,
-        "price_last_balance": 0.0,
-        "price_balance_indicator": "side_askbid",
-        "check_depth_of_market": {
-            "enabled": false,
-            "bids_to_ask_delta": 1
-        }
+        "order_book_top": 1
     },
     "exit_pricing": {
         "price_side": "same",
@@ -58,25 +52,10 @@
             "method": "StaticPairList"
         }
     ],
-    "api_server": {
-        "enabled": true,
-        "listen_ip_address": "127.0.0.1",
-        "listen_port": 8083,
-        "verbosity": "error",
-        "enable_openapi": true,
-        "CORS_origins": [],
-        "username": "freqtrader",
-        "jwt_secret_key": "sol_scalp_dryrun_local_only_change_before_live_0456",
-        "ws_token": "sol_scalp_dryrun_local_only_ws_token",
-        "password": "DaTSu9QRRCUB3yVUJn3bC3YnTMI69843"
-    },
     "bot_name": "cryptobot-scalp-portfolio",
     "initial_state": "running",
     "force_entry_enable": false,
     "internals": {
         "process_throttle_secs": 5
-    },
-    "add_config_files": [
-        "config_sol_scalp.secret.json"
-    ]
+    }
 }

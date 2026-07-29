@@ -1,4 +1,4 @@
-# SolRSI2_1h — RSI-2 extreme reversion with regime filter on SOL perp, 1h.
+# SolRSI2_1h — RSI-2 extreme reversion with regime filter, 1h, multi-coin.
 #
 # THESIS: RSI(2) < 9 is extremely oversold — price is likely to snap back.
 # Combined with a higher-timeframe uptrend filter (4h EMA50 > EMA200), this
@@ -9,14 +9,31 @@
 # more extreme filter than "price below VWAP band" — it only triggers on
 # genuine panic selling. Only 3.3% stop-out rate (7 stops in 209 trades).
 #
-# BACKTEST (OKX data, 0.05% taker fee, 2022-01 to 2026-07, 4.6yr):
+# PORTFOLIO: SOL + LINK + ADA (audit 2026-07-28, army research sweep).
+#   Multi-coin screen of 49 coins (Claude Code on Binance data) + 11 coins
+#   (Devin on Bitget data) + Ollama predictions + web search. Only 3 coins
+#   passed all gates: 3+yr history, >$100M daily volume, walk-forward
+#   validated (both halves profitable), positive RSI(2) mean-reversion edge.
+#   BTC/ETH/DOGE/AVAX/BNB all FAIL — too trending, RSI<9 = keep falling.
+#
+# PORTFOLIO BACKTEST (OKX data, 0.05% taker, $50/trade, max 3, 4.6yr):
+#   +23.69%, PF 1.60, Sharpe 1.71, Calmar 7.13, CAGR 4.82%, DD 3.85%
+#   559 trades, 71.2% win, avg hold 2:42
+#   Per-pair: SOL +12.27% (72.7% win) | ADA +6.59% (73.3%) | LINK +4.83% (67.7%)
+#   Walk-forward: 2022-2024 +11.1% PF1.6 | 2024-2026 +12.59% PF1.5
+#
+# SOLO BACKTEST (OKX, SOL-only, $100/trade, 4.6yr):
 #   +6.16%, PF 1.98, Sharpe 1.65, Calmar 9.89, DD 0.72%, 209 trades, 72.7% win
 #   Walk-forward: 2022-2024 +2.93% PF1.93 | 2024-2026 +3.23% PF2.04
 #
 # CROSS-EXCHANGE VALIDATION (Bitget data, same fee, same period):
 #   +5.85%, PF 1.97, Sharpe 1.62, 208 trades, 70.7% win
-#   Walk-forward: 2022-2024 +2.89% PF1.94 | 2024-2026 +2.96% PF2.00
 #   → Edge is exchange-agnostic (RSI signal, not venue-specific).
+#
+# STATISTICAL NOTE: No single coin is significant alone (p=0.15-0.35).
+#   The portfolio is significant (p=0.0011, Claude Code's calculation).
+#   Edge decayed ~50% after early 2024 on all coins including SOL, but
+#   both walk-forward halves remain profitable.
 #
 # INDIA RELOCATION PLAN (audit 2026-07-28):
 #   OKX is banned in India (exited Mar 2024, FIU restricted list).

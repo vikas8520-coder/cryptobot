@@ -147,7 +147,7 @@ BOTS = [
     ("Futures", 8081, api_pw(8081), "Short-only · 4h · funding harvest (backtest +24% PF1.56 DD8% net of funding, 6yr)"),
     ("ETH Futures", 8092, api_pw(8092), "Short-only ETH · 4h · ETH-tuned ADX30/CONF4 (backtest +11% PF1.92 DD3% net of funding, 6yr)"),
     ("Braked Hold", 8082, api_pw(8082), "200-day brake · spot · WINNER (backtest +1219% PF11)"),
-    ("Scalp", 8083, api_pw(8083), "RSI-2 dip reversion · 1h · SOL/USDT:USDT perp on OKX (backtest +6.2% PF1.98 Sharpe1.65 DD0.7% net of fees, 4.6yr, walk-forward validated)"),
+    ("Scalp", 8083, api_pw(8083), "RSI-2 dip reversion · 1h · SOL+LINK+ADA portfolio on OKX perp (backtest +23.7% PF1.60 Sharpe1.71 DD3.9% net of fees, 4.6yr, walk-forward validated, p=0.0011)"),
     ("Day Trade", 8084, api_pw(8084), "ORB breakout · 1h · BROKEN (restarted; -90% backtest)"),
     # ApeX removed 2026-07-23: synthetic-only paper engine whose balance inflated the
     # real-money headline to +2641%/$301k (synthetic price-path bug, not real capital).
