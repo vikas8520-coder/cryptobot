@@ -320,6 +320,43 @@ def api(port, pw, ep):
         return None
 
 
+# 2026-07-29: map bot display name -> config file, to read dry_run_wallet.
+# show_config API doesn't expose dry_run_wallet, so we read the file directly.
+_BOT_CONFIG_MAP = {
+    "Futures": "config_futures.json",
+    "ETH Futures": "config_eth_futures.json",
+    "Braked Hold": "config_braked_v2.json",
+    "Scalp": "config_sol_scalp.json",
+    "S&P 500": "config_spx.json",
+    "Nifty 50": "config_nifty.json",
+    "ONGC": "config_ongc.json",
+    "ITC": "config_itc.json",
+    "BTC": "config_btc.json",
+}
+_bot_config_cache = {}   # name -> (dry_run_wallet, mtime) so we only re-read on change
+
+def _dry_run_wallet_for(bot_name):
+    """Read dry_run_wallet from the bot's config file (cached by mtime).
+    Returns None if the config can't be read — caller falls back to START_EACH."""
+    path = os.path.join(BASE, _BOT_CONFIG_MAP.get(bot_name, ""))
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        mtime = os.path.getmtime(path)
+        cached = _bot_config_cache.get(bot_name)
+        if cached and cached[1] == mtime:
+            return cached[0]
+        import json as _json
+        cfg = _json.load(open(path))
+        wallet = cfg.get("dry_run_wallet")
+        if isinstance(wallet, (int, float)) and not isinstance(wallet, bool):
+            _bot_config_cache[bot_name] = (wallet, mtime)
+            return wallet
+    except Exception:
+        pass
+    return None
+
+
 @app.get("/api/overview")
 def overview():
     bots, tot_bal = [], 0.0
@@ -351,6 +388,16 @@ def overview():
         currency = "INR" if (sc == "INR" or pair.endswith("/INR")) else "USD"
         if has_bal:
             tot_bal += paper_fx.to_usd(b, currency)
+        # 2026-07-29: each bot's ACTUAL starting balance (dry_run_wallet from
+        # the config FILE, since show_config doesn't expose it), converted to
+        # USD — not a flat $1000. The old START_EACH*count assumed all 9 bots
+        # started with $1000 USD, but INR bots started with ~₹9656 (~$100) and
+        # Scalp/BTC started with $250/$500. The headline showed -44% when the
+        # real P&L is ~0%.
+        start_wallet = _dry_run_wallet_for(name)
+        if not isinstance(start_wallet, (int, float)) or isinstance(start_wallet, bool):
+            start_wallet = START_EACH   # fallback if config file missing
+        start_usd = paper_fx.to_usd(start_wallet, currency) if has_bal else 0
         # 30-day realized-equity sparkline from the /daily endpoint (most-recent-first)
         eq = []
         daily = api(port, pw, "daily?timescale=30")
@@ -371,6 +418,7 @@ def overview():
             "max_dd": max_dd_for(name, b, prof, eq_hist),
             "open": opens, "equity": eq,
             "currency": currency,    # [PAPER EQUITY] lets the card show ₹ vs $ per-bot
+            "start_usd": start_usd,  # 2026-07-29: actual starting balance in USD
             # the coin universe the bot is monitoring (base symbols), incl. any open-trade
             # pairs Freqtrade auto-adds; lets the card show "watching" even when flat
             "watching": [p.split("/")[0] for p in (wl.get("whitelist") or [])],
@@ -406,8 +454,12 @@ def overview():
 
     # headline math counts ONLY bots whose balance call succeeded — an offline bot
     # used to read as a fake -33% "loss" in the header (audit finding)
+    # 2026-07-29: start_total now sums each bot's ACTUAL dry_run_wallet (converted
+    # to USD), not a flat $1000 per bot. The old math assumed all 9 bots started
+    # with $1000 USD, but INR bots started with ~₹9656 (~$100) and Scalp/BTC
+    # started with $250/$500 — producing a fake -44% headline.
     n_reporting = sum(1 for x in bots if x.get("has_balance"))
-    start_total = START_EACH * n_reporting
+    start_total = sum(x.get("start_usd", 0) for x in bots if x.get("has_balance"))
     missing = [x["name"] for x in bots if not x.get("has_balance")]
     return JSONResponse({
         "bots": bots,
