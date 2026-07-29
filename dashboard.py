@@ -143,7 +143,10 @@ def max_dd_for(name, balance, prof, eq_hist):
 
 
 BOTS = [
-    ("Spot", 8080, api_pw(8080), "Trend-follow · spot · STAR live (backtest +41% PF1.19)"),
+    # Spot Trend-Follow parked 2026-07-28: edge expired 2024 (negative for 19 months,
+    # backtest confirms -0.43% over the live window too — not a backtest/live gap).
+    # The +41% was a 2022-23 artifact. 1h EMA50 exit sells on noise (avg hold 13h).
+    # Plist archived to disabled_plists/. Port 8080 free. Config/strategy kept for rebuild.
     ("Futures", 8081, api_pw(8081), "Short-only · 4h · funding harvest (backtest +24% PF1.56 DD8% net of funding, 6yr)"),
     ("ETH Futures", 8092, api_pw(8092), "Short-only ETH · 4h · ETH-tuned ADX30/CONF4 (backtest +11% PF1.92 DD3% net of funding, 6yr)"),
     ("Braked Hold", 8082, api_pw(8082), "200-day brake · spot · WINNER (backtest +1219% PF11)"),
@@ -1280,7 +1283,7 @@ function spark(vals){
    longer overflow the viewport, and the numbers line up column-wise so bots can
    be compared against each other instead of read one card at a time. */
 const BOT_GROUPS=[
-  ["Crypto",     ["Spot","Futures","Braked Hold"]],
+  ["Crypto",     ["Futures","Braked Hold"]],
   ["Short-term", ["Scalp","Day Trade"]],
   ["Paper equity", ["S&P 500","Nifty 50","ONGC","ITC","BTC"]],
 ];

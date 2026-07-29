@@ -10,7 +10,7 @@
     "trading_mode": "spot",
     "timeframe": "1d",
     "fee": 0.0005,
-    "synthetic": true,
+    "synthetic": false,
     "feed_refresh_secs": 300,
     "ltcg_strategy": {
         "pair": "NIFTYBEES/INR",
