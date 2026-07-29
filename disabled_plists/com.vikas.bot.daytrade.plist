@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.vikas.bot.daytrade</string>
+  <key>WorkingDirectory</key><string>/Users/vikasreddy/cryptobot</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/vikasreddy/cryptobot/.venv/bin/freqtrade</string>
+    <string>trade</string>
+    <string>--config</string><string>config_daytrade.json</string>
+    <string>--strategy</string><string>DayTradeORB</string>
+    <string>--db-url</string><string>sqlite:///tradesv3_daytrade.sqlite</string>
+    <string>--datadir</string><string>user_data/data/binanceus</string>
+  </array>
+  <key>KeepAlive</key><true/>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/vikasreddy/cryptobot/bot_daytrade.log</string>
+  <key>StandardErrorPath</key><string>/Users/vikasreddy/cryptobot/bot_daytrade.err</string>
+</dict>
+</plist>

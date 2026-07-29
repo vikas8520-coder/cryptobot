@@ -148,7 +148,9 @@ BOTS = [
     ("ETH Futures", 8092, api_pw(8092), "Short-only ETH · 4h · ETH-tuned ADX30/CONF4 (backtest +11% PF1.92 DD3% net of funding, 6yr)"),
     ("Braked Hold", 8082, api_pw(8082), "200-day brake · spot · WINNER (backtest +1219% PF11)"),
     ("Scalp", 8083, api_pw(8083), "RSI-2 dip reversion · 1h · SOL+LINK+ADA portfolio on OKX perp (backtest +23.7% PF1.60 Sharpe1.71 DD3.9% net of fees, 4.6yr, walk-forward validated, p=0.0011)"),
-    ("Day Trade", 8084, api_pw(8084), "ORB breakout · 1h · BROKEN (restarted; -90% backtest)"),
+    # Day Trade ORB killed 2026-07-28: zero-edge signal (event study n=30k, 108-config grid,
+    # short side all failed OOS). Crypto has no overnight info gap, so 00:00 UTC "opening
+    # range" is arbitrary noise. Plist archived to disabled_plists/. Port 8084 free.
     # ApeX removed 2026-07-23: synthetic-only paper engine whose balance inflated the
     # real-money headline to +2641%/$301k (synthetic price-path bug, not real capital).
     # Kept out of BOTS so the dashboard stops polling :8085 and the combined total is honest.
