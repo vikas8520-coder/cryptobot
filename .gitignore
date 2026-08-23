@@ -49,3 +49,12 @@ paper_scorecard.err
 
 # --- Diversified-brake runtime queue (regenerated each run) ---
 diversified_brake_pending.json
+
+# --- Nifty generated data / cache ---
+nifty_backtest/cache/
+nifty_backtest/*_results.json
+nifty_backtest/refine_*.json
+data/NSEI_index_*.csv
+data/NIFTY50_index_*.csv
+data/NSEI_index_daily_recent.csv
+*.dbc

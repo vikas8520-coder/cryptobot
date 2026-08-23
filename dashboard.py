@@ -12,15 +12,19 @@ Run:  ./.venv/bin/python dashboard.py     (or via launchd com.vikas.dashboard)
 
 # [cache-bust] bump on every dashboard change so a stale browser tab is obvious:
 # the build shows in <title> and the no-store header forces a fresh fetch.
-DASH_VERSION = "2026-07-29d"
+DASH_VERSION = "2026-08-03c"
 import csv
 from local_secrets import api_pw
 import json
+import math
 import os
+import sqlite3
 import paper_fx                 # [PAPER EQUITY] INR->USD for the combined headline
 
 import requests
 import uvicorn
+
+import nifty_dashboard
 from requests.auth import HTTPBasicAuth
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -33,6 +37,7 @@ EQUITY_CSV = os.path.join(BASE, "equity_history.csv")
 PORTFOLIO_BOARD = os.path.join(BASE, "diversified_brake_board.json")
 ACTIVITY_FEED = os.path.join(BASE, "activity_feed.jsonl")
 START_EACH = 1000.0
+POLY_DB = os.path.join(BASE, "polymarket.sqlite")
 
 
 def _job_paused(job):
@@ -167,6 +172,7 @@ BOTS = [
 
 app = FastAPI(title="Trading Desk")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE, "static")), name="static")
+app.mount("/nifty", nifty_dashboard.app, name="nifty_dashboard")
 
 CRYPTO_COINS = ["BTC", "ETH", "SOL", "XRP", "ADA", "LTC",
                 "DOGE", "LINK", "BNB", "AVAX", "DOT", "TRX"]
@@ -371,8 +377,10 @@ def overview():
         opens = []
         if st:
             for t in st:
+                if not isinstance(t, dict):
+                    continue
                 opens.append({
-                    "pair": t["pair"],
+                    "pair": t.get("pair", "?"),
                     "dir": "SHORT" if t.get("is_short") else "LONG",
                     "profit": (t.get("profit_ratio") or 0) * 100,
                     "stake": t.get("stake_amount") or 0,
@@ -511,14 +519,14 @@ BACKTEST_FILES = [
 
 
 def _safe_num(v):
-    """Coerce a backtest metric to float; 'inf' -> None (can't JSON-serialize
+    """Coerce a backtest metric to float; non-finite (inf/NaN) -> None (can't JSON-serialize
     and the UI shows '∞' instead). Strings/None pass through as-is."""
     if v is None:
         return None
     if isinstance(v, str):
         return None if v == "inf" else v
     if isinstance(v, (int, float)) and not isinstance(v, bool):
-        return float(v) if v != float("inf") else None
+        return float(v) if math.isfinite(v) else None
     return None
 
 
@@ -591,6 +599,52 @@ def backtests():
     return JSONResponse(out)
 
 
+# ---- backtest analyst reports ----------------------------------------------
+# Reads the timestamped analysis JSONs from backtest_analyses/. These are LLM-
+# generated reports (Claude analyzing the backtest results), served from a
+# separate endpoint and loaded once on page load alongside /api/backtests.
+ANALYSES_DIR = os.path.join(BASE, "backtest_analyses")
+
+
+@app.get("/api/backtest_analyses")
+def backtest_analyses():
+    """LLM-generated backtest analysis reports from backtest_analyses/*.json.
+    Returns a list sorted newest-first, each with timestamp, summary, and the
+    full structured analysis. Loaded once on page load — not polled."""
+    out = []
+    if not os.path.isdir(ANALYSES_DIR):
+        return JSONResponse(out)
+    try:
+        files = sorted(os.listdir(ANALYSES_DIR), reverse=True)
+    except Exception:
+        return JSONResponse(out)
+    for fname in files:
+        if not fname.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(ANALYSES_DIR, fname)) as f:
+                data = json.load(f)
+        except Exception:
+            continue
+        analysis = data.get("analysis", {})
+        risk = analysis.get("overfitting_risk", {})
+        out.append({
+            "file": fname,
+            "timestamp": data.get("timestamp", ""),
+            "checksum": data.get("checksum", ""),
+            "files_analyzed": data.get("files_analyzed", []),
+            "summary": analysis.get("summary", ""),
+            "overfitting_risk": risk.get("level", "?") if isinstance(risk, dict) else str(risk),
+            "drawdown_analysis": analysis.get("drawdown_analysis", ""),
+            "robustness": analysis.get("robustness", ""),
+            "benchmark_comparison": analysis.get("benchmark_comparison", ""),
+            "improvement_candidates": analysis.get("improvement_candidates", []),
+            "red_flags": analysis.get("red_flags", []),
+            "confidence": analysis.get("confidence", "?"),
+        })
+    return JSONResponse(out)
+
+
 @app.get("/api/brake/live")
 def brake_live():
     """On-demand FRESH brake status straight from the exchange (bypasses the hourly
@@ -625,6 +679,186 @@ def memory_full():
         except Exception:
             pass
     return JSONResponse({"text": brake_memory.summary(prices)})
+
+
+# ---- Polymarket copy-trading bot endpoints ----
+def _poly_conn():
+    """Open a short-lived SQLite connection to the polymarket DB."""
+    conn = sqlite3.connect(POLY_DB)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+@app.get("/api/polymarket/india")
+def poly_india():
+    """India Desk: India-relevant Polymarket markets with live gamma data +
+    last whale activity. Data-only view (MeitY blocked the platform in India
+    Apr 2026 — the bot never places orders, it just reads public data)."""
+    try:
+        conn = _poly_conn()
+        rows = conn.execute(
+            "SELECT * FROM india_markets ORDER BY volume_24h DESC"
+        ).fetchall()
+        # Filter recent trades with the boundary-aware matcher (SQL LIKE '%ipl%'
+        # would match "diplomatic").
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "polymarket"))
+        from india_watch import is_india_relevant
+        raw_trades = conn.execute(
+            "SELECT market, side, price, size, timestamp FROM raw_trades "
+            "WHERE timestamp >= datetime('now','-7 days') ORDER BY timestamp DESC LIMIT 5000"
+        ).fetchall()
+        trades = [dict(t) for t in raw_trades
+                  if is_india_relevant(t["market"])][:12]
+        conn.close()
+        return JSONResponse({
+            "markets": [dict(r) for r in rows],
+            "recent_india_trades": [dict(t) for t in trades],
+            "note": "India's MeitY blocked Polymarket (Apr 2026); VPN providers "
+                    "warned. Data-only view — no orders placed.",
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/polymarket/overview")
+def poly_overview():
+    """Summary: equity, PnL, drawdown, wallet count, open positions, trade stats."""
+    try:
+        conn = _poly_conn()
+        wallets = conn.execute("SELECT COUNT(*) c FROM wallet_universe WHERE is_active=1").fetchone()["c"]
+        snap = conn.execute("SELECT * FROM hourly_pnl_snapshot ORDER BY snapshot_at DESC LIMIT 1").fetchone()
+        scored = conn.execute("SELECT COUNT(DISTINCT wallet_address) c FROM wallet_scores").fetchone()["c"]
+        open_pos = conn.execute("SELECT COUNT(*) c FROM paper_positions WHERE status='OPEN'").fetchone()["c"]
+        total_trades = conn.execute("SELECT COUNT(*) c FROM raw_trades").fetchone()["c"]
+        decisions = conn.execute("SELECT decision, COUNT(*) c FROM trade_decisions GROUP BY decision").fetchall()
+        missed = conn.execute("SELECT COUNT(*) c FROM decision_journal WHERE is_missed_winner=1").fetchone()["c"]
+        rules = conn.execute("SELECT COALESCE(MAX(id),0) c FROM scoring_versions").fetchone()["c"]
+        conn.close()
+        return JSONResponse({
+            "equity": snap["equity"] if snap else 1000.0,
+            "pnl": snap["net_pnl"] if snap else 0.0,
+            "drawdown_pct": snap["drawdown_pct"] if snap else 0.0,
+            "peak_equity": snap["peak_equity"] if snap else 1000.0,
+            "open_positions": open_pos,
+            "wallets": wallets,
+            "scored_wallets": scored,
+            "total_trades": total_trades,
+            "decisions": {r["decision"]: r["c"] for r in decisions},
+            "missed_winners": missed,
+            "rule_version": rules,
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/polymarket/wallets")
+def poly_wallets():
+    """Top 20 ranked wallets with scores and category edge."""
+    try:
+        conn = _poly_conn()
+        rows = conn.execute("""
+            SELECT ws.wallet_address, ws.composite_score, ws.roi_score,
+                   ws.consistency_score, ws.copyability_score, ws.entry_timing_score,
+                   ws.category_edge, ws.rank, ws.scored_at,
+                   wu.raw_leaderboard_data
+            FROM wallet_scores ws
+            JOIN wallet_universe wu ON wu.wallet_address = ws.wallet_address
+            WHERE ws.scored_at = (SELECT MAX(scored_at) FROM wallet_scores)
+            ORDER BY ws.rank ASC LIMIT 20
+        """).fetchall()
+        conn.close()
+        wallets = []
+        for r in rows:
+            data = json.loads(r["raw_leaderboard_data"] or "{}")
+            edge = json.loads(r["category_edge"] or "{}")
+            wallets.append({
+                "rank": r["rank"],
+                "address": r["wallet_address"],
+                "short": r["wallet_address"][:6] + "\u2026" + r["wallet_address"][-4:],
+                "pseudonym": data.get("pseudonym") or data.get("name") or "",
+                "composite": r["composite_score"],
+                "roi": r["roi_score"],
+                "consistency": r["consistency_score"],
+                "copyability": r["copyability_score"],
+                "timing": r["entry_timing_score"],
+                "category_edge": edge,
+                "volume": data.get("volume_24h") or data.get("volume") or 0,
+                "trades": data.get("trade_count") or 0,
+            })
+        return JSONResponse(wallets)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/polymarket/positions")
+def poly_positions():
+    """Open paper positions + recent closed ones."""
+    try:
+        conn = _poly_conn()
+        open_rows = conn.execute(
+            "SELECT * FROM paper_positions WHERE status='OPEN' ORDER BY opened_at DESC"
+        ).fetchall()
+        closed_rows = conn.execute(
+            "SELECT * FROM paper_positions WHERE status='CLOSED' ORDER BY closed_at DESC LIMIT 10"
+        ).fetchall()
+        conn.close()
+        def pos_dict(r):
+            return {
+                "id": r["id"], "wallet": r["wallet_address"][:8],
+                "market": r["market"][:40], "side": r["side"],
+                "entry": r["entry_price"], "size": r["position_size"],
+                "opened": r["opened_at"], "closed": r["closed_at"],
+                "pnl": r["realized_pnl"] if r["realized_pnl"] is not None else 0.0,
+                "exit": r["exit_reason"] or "",
+            }
+        return JSONResponse({
+            "open": [pos_dict(r) for r in open_rows],
+            "closed": [pos_dict(r) for r in closed_rows],
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/polymarket/rules")
+def poly_rules():
+    """Rule version history + recent decision mix."""
+    try:
+        conn = _poly_conn()
+        versions = conn.execute(
+            "SELECT id, effective_from, rule_set, change_reason FROM scoring_versions ORDER BY id DESC LIMIT 10"
+        ).fetchall()
+        mix = conn.execute(
+            "SELECT decision, COUNT(*) c FROM trade_decisions GROUP BY decision"
+        ).fetchall()
+        tiers = conn.execute(
+            "SELECT bet_size_tier, COUNT(*) c FROM trade_decisions WHERE decision='COPY' GROUP BY bet_size_tier"
+        ).fetchall()
+        conn.close()
+        return JSONResponse({
+            "versions": [
+                {"id": v["id"], "from": v["effective_from"],
+                 "rules": json.loads(v["rule_set"] or "{}"), "reason": v["change_reason"] or ""}
+                for v in versions
+            ],
+            "decision_mix": {r["decision"]: r["c"] for r in mix},
+            "bet_tiers": {r["bet_size_tier"]: r["c"] for r in tiers},
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/polymarket/timeline")
+def poly_timeline():
+    """Hourly PnL snapshots for the equity chart."""
+    try:
+        conn = _poly_conn()
+        rows = conn.execute(
+            "SELECT snapshot_at, equity, net_pnl, drawdown_pct, open_positions_count "
+            "FROM hourly_pnl_snapshot ORDER BY snapshot_at ASC LIMIT 200"
+        ).fetchall()
+        conn.close()
+        return JSONResponse([
+            {"t": r["snapshot_at"], "eq": r["equity"], "pnl": r["net_pnl"],
+             "dd": r["drawdown_pct"], "pos": r["open_positions_count"]}
+            for r in rows
+        ])
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/")
@@ -940,6 +1174,18 @@ PAGE = r"""<!doctype html>
   .bttable .bench{color:var(--muted);font-style:italic;}
   .bttable .inf{color:var(--faint);}
 
+  .bttable td.bench{color:var(--faint);font-style:italic;}
+
+  /* ---- backtest analyst panel ---- */
+  #analyses{display:grid;grid-template-columns:1fr;gap:20px;}
+  .analyst-summary{font-size:14px;line-height:1.5;margin:8px 0;padding:10px 12px;
+    background:var(--bg);border-radius:8px;border-left:3px solid var(--teal);}
+  .analyst-section{font-size:13px;line-height:1.5;margin:6px 0;color:var(--text);}
+  .analyst-section b{color:var(--faint);font-weight:600;}
+  .analyst-list{margin:6px 0 0;padding-left:18px;font-size:12.5px;line-height:1.6;}
+  .analyst-list li{margin-bottom:4px;}
+  .analyst-list li b{color:var(--text);}
+
   /* narrow screens: shed the least-load-bearing columns (sparkline, trades, win)
      rather than let the row wrap — balance and P&L are the two that must survive */
   @media(max-width:900px){.board{grid-template-columns:repeat(3,1fr);}
@@ -948,6 +1194,58 @@ PAGE = r"""<!doctype html>
     .totals{gap:22px;}.totals .big{font-size:21px;}
     .btgrid{grid-template-columns:1fr;}}
   @media(max-width:520px){.board{grid-template-columns:repeat(2,1fr);}}
+
+  /* ---- Polymarket copy-trading bot section ---- */
+  .polyhead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-top:26px;}
+  .polystats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:18px;}
+  .polystat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .polystat .lb{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;}
+  .polystat .vl{font-size:22px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;}
+  .polystat .sb{font-size:11px;color:var(--muted);margin-top:2px;}
+  .polygrid{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-top:18px;}
+  .polycard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0;}
+  .polycard h3{font-size:13px;margin:0 0 12px;color:var(--muted);font-weight:600;letter-spacing:.03em;}
+  .polytable{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .polytbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .polytbl th,.polytable th{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;
+    text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);font-weight:600;}
+  .polytable td{padding:7px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;}
+  .polytbl td{padding:7px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;}
+  .polytable tr:last-child td{border-bottom:none;}
+  .polytbl tr:last-child td{border-bottom:none;}
+  .polyedge{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:6px;
+    background:var(--surface-2);color:var(--muted);margin:1px 2px 1px 0;border:1px solid var(--line);}
+  .polyedge.hot{background:rgba(63,199,168,.12);color:var(--teal);border-color:rgba(63,199,168,.35);}
+  .polybar{height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden;min-width:44px;}
+  .polybar i{display:block;height:100%;background:var(--teal);border-radius:3px;}
+  .polypos{font-size:12.5px;padding:9px 0;border-bottom:1px solid var(--line);display:flex;
+    justify-content:space-between;gap:10px;align-items:baseline;}
+  .polypos:last-child{border-bottom:none;}
+  .polypos .mk{color:var(--text);font-weight:600;}
+  .polypos .sd{color:var(--muted);font-size:11px;}
+  .polyrule{font-size:12px;padding:8px 0;border-bottom:1px solid var(--line);color:var(--muted);}
+  .polyrule:last-child{border-bottom:none;}
+  .polyrule b{color:var(--text);}
+  .polyempty{color:var(--faint);font-size:12.5px;padding:14px 0;text-align:center;}
+  .polymix span{display:inline-block;margin:2px 4px 2px 0;font-size:11px;padding:2px 8px;border-radius:6px;
+    background:var(--surface-2);border:1px solid var(--line);color:var(--muted);}
+  .polycanvas{width:100%;height:170px;}
+  @media(max-width:1100px){.polystats{grid-template-columns:repeat(2,1fr);}.polygrid{grid-template-columns:1fr;}}
+
+  /* ---- sectioned layout: sticky menubar + tab pages ---- */
+  .menubar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:4px;flex-wrap:wrap;
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    padding:6px 8px;margin-top:18px;box-shadow:0 6px 18px rgba(0,0,0,.25);}
+  .menubar .mtab{appearance:none;border:1px solid transparent;background:transparent;color:var(--muted);
+    font:600 12.5px var(--sans);padding:7px 13px;border-radius:8px;cursor:pointer;transition:all .15s;}
+  .menubar .mtab:hover{color:var(--text);background:var(--surface-2);}
+  .menubar .mtab.active{color:var(--teal);background:rgba(63,199,168,.1);border-color:rgba(63,199,168,.35);}
+  .menubar .mright{margin-left:auto;display:flex;gap:4px;align-items:center;flex-wrap:wrap;}
+  .menubar .tbtn{font-size:12px;padding:6px 10px;}
+  .tabpage{display:none;}
+  .tabpage.active{display:block;animation:fadein .18s ease;}
+  @keyframes fadein{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+  @media(max-width:720px){.menubar{position:static;}.menubar .mright{margin-left:0;width:100%;justify-content:flex-end;}}
 </style></head>
 <body>
 <div class="wrap">
@@ -972,14 +1270,24 @@ PAGE = r"""<!doctype html>
     </div>
   </header>
 
-  <div class="toolbar">
-    <button class="tbtn" id="btnBrake" type="button">🪂 Brake — live check</button>
-    <button class="tbtn" id="btnMem" type="button">🧠 Memory — full record</button>
-    <button class="tbtn" id="themeToggle" type="button" style="margin-left:auto">☀️ Light mode</button>
-  </div>
+  <nav class="menubar" aria-label="Sections">
+    <button class="mtab" data-tab="desk" type="button">📊 Desk</button>
+    <button class="mtab" data-tab="charts" type="button">📈 Charts</button>
+    <button class="mtab" data-tab="brake" type="button">🪂 Brake board</button>
+    <button class="mtab" data-tab="backtests" type="button">🧪 Backtests</button>
+    <button class="mtab" data-tab="polymarket" type="button">🎯 Polymarket</button>
+    <button class="mtab" data-tab="india" type="button">🇮🇳 India</button>
+    <button class="mtab" data-tab="nifty" type="button">🪙 Nifty 5m</button>
+    <span class="mright">
+      <button class="tbtn" id="btnBrake" type="button">🪂 Brake — live check</button>
+      <button class="tbtn" id="btnMem" type="button">🧠 Memory — full record</button>
+      <button class="tbtn" id="themeToggle" type="button">☀️ Light mode</button>
+    </span>
+  </nav>
 
   <div id="guard" class="guard" hidden></div>
 
+  <section class="tabpage" data-tab="desk">
   <h2 class="sec">Bots</h2>
   <div class="bots" id="bots"></div>
 
@@ -995,6 +1303,17 @@ PAGE = r"""<!doctype html>
       <div class="feed" id="activity"></div>
     </div>
   </div>
+
+  <div class="pfcard" style="margin-top:26px">
+    <div class="brakehead" style="margin-top:0">
+      <h2 class="sec">Nifty 5m paper bot</h2>
+      <span class="label" style="color:var(--faint)" id="niftyLast">paper · no orders · 2% risk</span>
+    </div>
+    <div id="niftyDesk"><div style="color:var(--faint);padding:8px 0">loading…</div></div>
+  </div>
+  </section>
+
+  <section class="tabpage" data-tab="charts">
 
   <div class="brakehead" style="margin-top:26px">
     <h2 class="sec" id="chartToggle" style="cursor:pointer" title="click to collapse/expand">▾ Price chart</h2>
@@ -1054,7 +1373,9 @@ PAGE = r"""<!doctype html>
       <div class="obcard" id="recenttrades"><div style="color:var(--faint)">loading…</div></div>
     </div>
   </div>
+  </section>
 
+  <section class="tabpage" data-tab="brake">
   <div class="brakehead" style="margin-top:26px">
     <h2 class="sec">200-day brake board · crypto</h2>
     <span class="label" id="brakesum"></span>
@@ -1086,12 +1407,87 @@ PAGE = r"""<!doctype html>
       <div class="mem" id="memory"></div>
     </div>
   </div>
+  </section>
 
+  <section class="tabpage" data-tab="backtests">
   <div class="brakehead" style="margin-top:26px">
     <h2 class="sec">Backtest lab · after-tax research</h2>
     <span class="label" style="color:var(--faint)">offline · static results</span>
   </div>
   <div class="btgrid" id="backtests"></div>
+
+  <div class="brakehead" style="margin-top:26px">
+    <h2 class="sec">Backtest analyst · LLM reports</h2>
+    <span class="label" style="color:var(--faint)">AI-generated · for human review</span>
+  </div>
+  <div id="analyses"></div>
+  </section>
+
+  <section class="tabpage" data-tab="polymarket">
+  <div class="polyhead">
+    <h2 class="sec" style="margin-top:0">Polymarket copy-trading bot</h2>
+    <span class="label" style="color:var(--faint)" id="polylast">paper · local</span>
+  </div>
+  <div class="polystats" id="polystats">
+    <div class="polystat"><div class="lb">Paper equity</div><div class="vl" id="pEq">—</div><div class="sb">starting bankroll $1,000</div></div>
+    <div class="polystat"><div class="lb">Net P&amp;L</div><div class="vl" id="pPnl">—</div><div class="sb" id="pPnlSub"></div></div>
+    <div class="polystat"><div class="lb">Wallet universe</div><div class="vl" id="pWallets">—</div><div class="sb" id="pWalletsSub"></div></div>
+    <div class="polystat"><div class="lb">Open positions</div><div class="vl" id="pPos">—</div><div class="sb" id="pPosSub"></div></div>
+  </div>
+  <div class="polygrid">
+    <div class="polycard">
+      <h3>Equity curve · paper</h3>
+      <canvas class="polycanvas" id="polyChart"></canvas>
+      <div class="polyempty" id="polyChartEmpty" style="display:none">no hourly snapshots yet</div>
+    </div>
+    <div class="polycard">
+      <h3>Decision mix</h3>
+      <div class="polymix" id="polyMix"><span class="polyempty" style="display:block;text-align:left;padding:0">no decisions yet</span></div>
+      <h3 style="margin-top:14px">Rule versions</h3>
+      <div id="polyRules"><div class="polyempty">no rule updates yet</div></div>
+    </div>
+  </div>
+  <div class="polygrid">
+    <div class="polycard">
+      <h3>Top wallets · score &amp; category edge</h3>
+      <table class="polytable" id="polyWallets"><tbody><tr><td class="polyempty">no wallet scores yet</td></tr></tbody></table>
+    </div>
+    <div class="polycard">
+      <h3>Paper positions</h3>
+      <div id="polyPositions"><div class="polyempty">no positions yet</div></div>
+    </div>
+  </div>
+  </section>
+
+  <section class="tabpage" data-tab="india">
+  <div class="polyhead">
+    <h2 class="sec" style="margin-top:0">India Desk · Indian markets</h2>
+    <span class="label" style="color:var(--faint)" id="indiaLast">data-only · no orders</span>
+  </div>
+  <div class="polyempty" id="indiaNote" style="margin-bottom:14px;color:var(--amber)">
+    ⚠️ India's MeitY blocked Polymarket (Apr 2026) and warned VPN providers.
+    This desk only <b>reads public market data</b> — it never places orders.
+  </div>
+  <div class="polystats">
+    <div class="polystat"><span class="label">Indian markets</span><b id="indiaCount">—</b></div>
+    <div class="polystat"><span class="label">Whale trades · 7d</span><b id="indiaTrades">—</b></div>
+    <div class="polystat"><span class="label">Watchlist</span><b id="indiaWatch">6</b></div>
+  </div>
+  <div class="polycard" style="margin-top:16px">
+    <h3>Indian markets · live prices & whale flow</h3>
+    <div id="indiaMarkets"><div class="polyempty">loading…</div></div>
+  </div>
+  <div class="polycard" style="margin-top:16px">
+    <h3>Recent whale trades · India-relevant</h3>
+    <div id="indiaTradesTable"><div class="polyempty">loading…</div></div>
+  </div>
+  </section>
+
+  <section class="tabpage" data-tab="nifty">
+  <div style="height:calc(100vh - 160px);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)">
+    <iframe src="/nifty/" style="width:100%;height:100%;border:0;"></iframe>
+  </div>
+  </section>
 
   <div class="err" id="err" hidden></div>
 </div>
@@ -1133,7 +1529,7 @@ function fmtTime(t){
   if(t&&t.year) return `${t.year}-${String(t.month).padStart(2,"0")}-${String(t.day).padStart(2,"0")}`;
   return String(t);
 }
-let _chart=null,_cs=null,_ss=null,_vs=null,_data=null,_range="1Y",_tall=false;
+let _chart=null,_cs=null,_ss=null,_vs=null,_data=null,_range="1Y",_tall=false,_lastEquity=null;
 function initChart(){
   if(_chart||!window.LightweightCharts) return;
   const el=$("pricechart");
@@ -1752,6 +2148,7 @@ function drawEquityChart(hist){
 
 // ---- backtest lab: load once on page load (static data, not polled) ----
 function fmtPct(v){return v==null?"—":(v>=0?"+":"")+v.toFixed(1)+"%";}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function fmtNum(v,d=2){return v==null?"—":v.toFixed(d);}
 function fmtInf(v,d=2){return v==null?"∞":v.toFixed(d);}
 function fmtInt(v){return v==null?"—":String(v);}
@@ -1815,7 +2212,90 @@ async function loadBacktests(){
 }
 loadBacktests();
 
+// ---- backtest analyst reports ----
+async function loadAnalyses(){
+  try{
+    const r=await fetch("/api/backtest_analyses",{cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const reports=await r.json();
+    if(!reports.length){
+      $("analyses").innerHTML=`<div class="none mono" style="color:var(--faint);padding:12px 4px">no analyst reports yet — run backtest_analyst.py to generate one</div>`;
+      return;
+    }
+    $("analyses").innerHTML=reports.map(rep=>{
+      const ts=rep.timestamp?new Date(rep.timestamp).toLocaleString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"—";
+      const riskClass=rep.overfitting_risk==="high"?"neg":rep.overfitting_risk==="low"?"pos":"";
+      const flags=rep.red_flags||[];
+      const cands=rep.improvement_candidates||[];
+      const flagHtml=flags.length?`<div class="btmeta" style="margin-top:8px"><span style="color:var(--neg)">🚩 ${flags.length} red flags</span></div>
+        <ul class="analyst-list">${flags.map(f=>`<li>${esc(f)}</li>`).join("")}</ul>`:"";
+      const candHtml=cands.length?`<div class="btmeta" style="margin-top:8px"><span style="color:var(--pos)">💡 ${cands.length} improvement candidates</span></div>
+        <ul class="analyst-list">${cands.map(c=>{
+          const ch=typeof c==="object"?esc(c.change||"?"):"—";
+          const ra=typeof c==="object"?esc(c.rationale||""):"";
+          return `<li><b>${ch}</b>${ra?" — "+ra:""}</li>`;
+        }).join("")}</ul>`:"";
+      const ddHtml=rep.drawdown_analysis?`<div class="analyst-section"><b>Drawdown:</b> ${esc(rep.drawdown_analysis)}</div>`:"";
+      const robHtml=rep.robustness?`<div class="analyst-section"><b>Robustness:</b> ${esc(rep.robustness)}</div>`:"";
+      const bmHtml=rep.benchmark_comparison?`<div class="analyst-section"><b>Benchmark:</b> ${esc(rep.benchmark_comparison)}</div>`:"";
+      return `<div class="btcard">
+        <div class="bthead"><h3>${ts}</h3>
+          <span class="label" style="color:var(--faint)">${rep.confidence||"?"} confidence</span></div>
+        <div class="btmeta">
+          <span class="${riskClass}">overfit: ${esc(rep.overfitting_risk||"?")}</span>
+          <span>${(rep.files_analyzed||[]).length} files</span>
+        </div>
+        <div class="analyst-summary">${esc(rep.summary||"—")}</div>
+        ${ddHtml}${robHtml}${bmHtml}
+        ${flagHtml}${candHtml}
+      </div>`;
+    }).join("");
+  }catch(e){
+    $("analyses").innerHTML=`<div class="none mono" style="color:var(--faint);padding:12px 4px">couldn't load analyst reports: ${e.message}</div>`;
+  }
+}
+loadAnalyses();
+
 let tickBusy=false;             // in-flight guard: a hung bot must not stack requests
+let niftyBusy=false;
+
+const _niftyInr=v=>"₹"+v.toLocaleString(undefined,{maximumFractionDigits:0});
+const _niftyPct=v=>(v>=0?"+":"")+v.toFixed(2)+"%";
+
+async function loadNiftyPaperDesk(){
+  if(niftyBusy) return;
+  niftyBusy=true;
+  try{
+    const r=await fetch("/nifty/api/stats",{cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const d=await r.json();
+    const s=d.stats||{};
+    const logTail=(d.log||[]).slice(-3).join(" · ")||"no log";
+    let html=`<div class="fund" style="gap:18px 34px">`
+      +`<div><span class="label">Trades</span><b style="font-size:20px">${s.trades}</b></div>`
+      +`<div><span class="label">Win rate</span><b style="font-size:20px">${s.win_rate_pct}%</b></div>`
+      +`<div><span class="label">Profit factor</span><b style="font-size:20px">${s.profit_factor}</b></div>`
+      +`<div><span class="label">Total P&amp;L</span><b class="${s.total_pnl>=0?'pos':'neg'}" style="font-size:20px">${_niftyInr(s.total_pnl)}</b></div>`
+      +`<div><span class="label">Total return</span><b class="${s.total_return_pct>=0?'pos':'neg'}" style="font-size:20px">${_niftyPct(s.total_return_pct)}</b></div>`
+      +`<div><span class="label">Max DD</span><b class="neg" style="font-size:20px">${s.max_drawdown_pct}%</b></div>`
+      +`</div>`;
+    if(s.equity && s.equity.length>1) html+=`<div style="margin-top:10px">${spark(s.equity)}</div>`;
+    if(d.open && d.open.length){
+      html+=`<div class="label" style="margin-top:14px">Open position</div>`
+        +`<div class="mono" style="font-size:12px">`
+        +d.open.map(o=>`${o.side.toUpperCase()} ${o.opt_type} ${o.strike} @ ${o.entry_time} · lots ${o.lots}`).join(", ")
+        +`</div>`;
+    }
+    html+=`<div style="margin-top:8px;color:var(--faint);font-size:11px" class="mono">latest log: ${logTail}</div>`;
+    $("niftyDesk").innerHTML=html;
+    $("niftyLast").textContent=`paper · ${s.trades} closed · latest: ${logTail}`;
+  }catch(e){
+    $("niftyDesk").innerHTML=`<div style="color:var(--brick);font-size:12px">Nifty 5m paper view temporarily unavailable</div>`;
+  }finally{
+    niftyBusy=false;
+  }
+}
+
 async function tick(){
   if(tickBusy) return;
   tickBusy=true;
@@ -1914,7 +2394,7 @@ async function tick(){
     }).join(""):`<div class="none mono" style="color:var(--faint);padding:12px 14px">no activity yet — alerts appear here as they're sent to Telegram</div>`;
 
     // equity vs benchmarks chart
-    drawEquityChart(d.equity_history);
+    drawEquityChart(d.equity_history); _lastEquity=d.equity_history||null;
 
     // brake memory
     const m=d.memory;
@@ -1942,6 +2422,7 @@ async function tick(){
     $("upd").textContent="disconnected"; $("livedot").style.background="var(--brick)";
   }finally{
     tickBusy=false;
+    loadNiftyPaperDesk();
   }
 }
 tick(); setInterval(tick, 15000);
@@ -1980,6 +2461,185 @@ $("btnMem").onclick=async()=>{
   }catch(e){ openModal("🧠 Memory",`<div class="sparkempty">error: ${e.message}</div>`); }
   b.disabled=false; b.textContent=t;
 };
+
+// ---- Polymarket copy-trading bot section ----
+const escH=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pct2=v=>{const n=Number(v)||0;return (n>=0?"+":"")+n.toFixed(1)+"%";};
+let _polyChart=null;
+
+function drawPolyChart(pts){
+  const cv=$("polyChart"),ctx=cv.getContext("2d");
+  const empty=$("polyChartEmpty");
+  if(!pts||pts.length<2){cv.style.display="none";empty.style.display="block";return;}
+  cv.style.display="block";empty.style.display="none";
+  const dpr=window.devicePixelRatio||1, W=cv.clientWidth||320, H=170;
+  cv.width=W*dpr;cv.height=H*dpr;ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,H);
+  const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const txt=css("--text"),muted=css("--muted"),faint=css("--faint"),line=css("--line"),teal=css("--teal");
+  const vals=pts.map(p=>Number(p.eq));
+  const min=Math.min(...vals),max=Math.max(...vals),span=(max-min)||1;
+  const pad=6;
+  const x=i=>pad+(W-2*pad)*i/(pts.length-1);
+  const y=v=>H-pad-(H-2*pad)*(v-min)/span;
+  // grid
+  ctx.strokeStyle=line;ctx.fillStyle=faint;ctx.font="9px ui-monospace,Menlo,monospace";
+  for(let g=0;g<=3;g++){const gy=pad+(H-2*pad)*g/3;ctx.beginPath();ctx.moveTo(pad,gy);ctx.lineTo(W-pad,gy);ctx.stroke();
+    const gv=max-(max-min)*g/3;ctx.fillText(gv.toFixed(0),2,gy-2);}
+  // equity line
+  ctx.beginPath();ctx.strokeStyle=teal;ctx.lineWidth=1.6;ctx.lineJoin="round";
+  pts.forEach((p,i)=>{const px=x(i),py=y(p.eq);i?ctx.lineTo(px,py):ctx.moveTo(px,py);});
+  ctx.stroke();
+  // fill
+  ctx.lineTo(x(pts.length-1),H-pad);ctx.lineTo(x(0),H-pad);ctx.closePath();
+  ctx.fillStyle="rgba(63,199,168,.08)";ctx.fill();
+  // last label
+  ctx.fillStyle=txt;ctx.font="10px ui-monospace,Menlo,monospace";
+  const last=pts[pts.length-1];
+  ctx.fillText(`$${Number(last.eq).toFixed(0)}`,W-pad-40,14);
+}
+
+async function loadPoly(){
+  const grab=async url=>{try{return await (await fetch(url,{cache:"no-store"})).json();}catch(e){return {error:e.message};}};
+  const [ov,wallets,positions,rules,tl]=await Promise.all([
+    grab("/api/polymarket/overview"),grab("/api/polymarket/wallets"),
+    grab("/api/polymarket/positions"),grab("/api/polymarket/rules"),
+    grab("/api/polymarket/timeline"),
+  ]);
+  if(ov.error){$("polylast").textContent="error: "+ov.error;return;}
+  $("polylast").textContent=`paper · local · ${ov.total_trades.toLocaleString()} trades ingested`;
+  const eq=Number(ov.equity),pnl=Number(ov.pnl);
+  $("pEq").textContent="$"+eq.toLocaleString(undefined,{maximumFractionDigits:0});
+  $("pEq").style.color=pnl>=0?"var(--teal)":"var(--brick)";
+  $("pPnl").textContent=(pnl>=0?"+":"")+pnl.toFixed(2);
+  $("pPnl").style.color=pnl>=0?"var(--teal)":"var(--brick)";
+  $("pPnlSub").textContent=`dd ${ov.drawdown_pct}% · peak $${Number(ov.peak_equity).toFixed(0)}`;
+  $("pWallets").textContent=ov.wallets.toLocaleString();
+  $("pWalletsSub").textContent=`${ov.scored_wallets.toLocaleString()} scored · ${ov.total_trades.toLocaleString()} trades`;
+  $("pPos").textContent=ov.open_positions;
+  $("pPosSub").textContent=`${ov.missed_winners} missed winners · rule v${ov.rule_version}`;
+
+  // decision mix
+  const mix=ov.decisions||{};
+  const mixEl=$("polyMix");
+  if(Object.keys(mix).length){
+    mixEl.innerHTML=["COPY","WATCH","SKIP"].map(k=>
+      `<span>${k} <b>${mix[k]||0}</b></span>`).join("");
+  }else mixEl.innerHTML=`<span class="polyempty" style="display:block;text-align:left;padding:0">no decisions yet</span>`;
+
+  // wallets
+  if(Array.isArray(wallets)&&!wallets.error&&wallets.length){
+    const rows=wallets.map(w=>{
+      const edge=Object.entries(w.category_edge||{})
+        .map(([k,v])=>`<span class="polyedge ${Number(v)>=0.55?"hot":""}">${k} ${(Number(v)*100).toFixed(0)}</span>`).join("");
+      return `<tr>
+        <td style="color:var(--faint)">${w.rank}</td>
+        <td><span title="${escH(w.address)}">${escH(w.short)}</span>${w.pseudonym?`<div style="font-size:10px;color:var(--faint)">${escH(w.pseudonym)}</div>`:""}</td>
+        <td><div class="polybar"><i style="width:${Math.round(Number(w.composite)*100)}%"></i></div></td>
+        <td style="text-align:right">${Number(w.composite).toFixed(2)}</td>
+        <td>${edge}</td>
+      </tr>`;
+    }).join("");
+    $("polyWallets").innerHTML=`<thead><tr><th>#</th><th>Wallet</th><th>Score</th><th>Comp</th><th>Category edge</th></tr></thead><tbody>${rows}</tbody>`;
+  }
+
+  // positions
+  const posEl=$("polyPositions");
+  if(positions&&!positions.error&&(positions.open.length||positions.closed.length)){
+    const open=positions.open.map(p=>
+      `<div class="polypos"><span><span class="mk">${escH(p.side)}</span> ${escH(p.market)} <span class="sd">@ ${p.entry} · $${p.size}</span></span><span class="sd">${escH(String(p.opened).slice(0,16))}</span></div>`).join("");
+    const closed=positions.closed.map(p=>
+      `<div class="polypos" style="opacity:.7"><span><span class="mk">${escH(p.side)}</span> ${escH(p.market)} <span class="sd">${p.pnl>=0?"+":""}${Number(p.pnl).toFixed(2)} ${p.exit?("· "+escH(p.exit)):""}</span></span><span class="sd">closed</span></div>`).join("");
+    posEl.innerHTML=(open?`<div style="font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Open (${positions.open.length})</div>${open}`:"")
+      +(closed?`<div style="font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 4px">Recently closed</div>${closed}`:"");
+  }
+
+  // rules
+  const ruleEl=$("polyRules");
+  if(rules&&!rules.error&&rules.versions.length){
+    ruleEl.innerHTML=rules.versions.map(v=>
+      `<div class="polyrule"><b>v${v.id}</b> · ${escH(String(v.from).slice(0,16))} — ${escH(v.reason)}</div>`).join("");
+  }
+
+  // equity chart
+  drawPolyChart(Array.isArray(tl)&&!tl.error?tl:[]);
+}
+
+// ---- India Desk ----
+async function loadIndia(){
+  try{
+    const r=await fetch("/api/polymarket/india",{cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const d=await r.json();
+    if(d.error){ $("indiaMarkets").innerHTML=`<div class="polyempty">${escH(d.error)}</div>`; return; }
+    const mk=$("indiaMarkets"), tl=$("indiaTradesTable");
+    $("indiaCount").textContent=d.markets.length;
+    $("indiaTrades").textContent=d.recent_india_trades.length;
+    $("indiaLast").textContent="data-only · no orders · "+new Date().toLocaleTimeString();
+    if(!d.markets.length){
+      mk.innerHTML=`<div class="polyempty">no Indian markets tracked yet — run the india_watch scanner, or add slugs to india_watchlist.json</div>`;
+    }else{
+      mk.innerHTML=`<table class="polytbl"><thead><tr>
+        <th>Market</th><th>Last</th><th>Spread</th><th>Liquidity</th><th>Vol 24h</th><th>Last whale trade</th>
+        </tr></thead><tbody>`+d.markets.map(m=>{
+        let p="—";
+        try{ const op=JSON.parse(m.outcome_prices||"[]"); p=op[1]!==undefined?`${(op[1]*100).toFixed(1)}¢`:(op[0]!==undefined?`${(op[0]*100).toFixed(1)}¢`:"—"); }catch(e){}
+        return `<tr>
+          <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escH(m.market)}">${escH(m.market)}</td>
+          <td>${p}</td><td>${m.spread!=null?(m.spread*100).toFixed(1)+"¢":"—"}</td>
+          <td>${m.liquidity!=null?"$"+Math.round(m.liquidity).toLocaleString():"—"}</td>
+          <td>${m.volume_24h!=null?"$"+Math.round(m.volume_24h).toLocaleString():"—"}</td>
+          <td style="font-size:11px">${m.last_whale_trade_at?escH(String(m.last_whale_trade_at).replace("T"," ").slice(5,16)):"—"}</td>
+        </tr>`;
+      }).join("")+`</tbody></table>`;
+    }
+    if(!d.recent_india_trades.length){
+      tl.innerHTML=`<div class="polyempty">no India-relevant whale trades in the last 7 days</div>`;
+    }else{
+      tl.innerHTML=`<table class="polytbl"><thead><tr><th>When</th><th>Side</th><th>Price</th><th>Size</th><th>Market</th></tr></thead><tbody>`+
+        d.recent_india_trades.map(t=>`<tr>
+          <td style="font-size:11px">${escH(String(t.timestamp).replace("T"," ").slice(5,16))}</td>
+          <td style="color:${t.side==="YES"?"var(--teal)":"var(--brick)"}">${escH(t.side)}</td>
+          <td>${Number(t.price).toFixed(3)}</td><td>${Number(t.size).toFixed(2)}</td>
+          <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escH(t.market)}">${escH(t.market)}</td>
+        </tr>`).join("")+`</tbody></table>`;
+    }
+  }catch(e){ $("indiaMarkets").innerHTML=`<div class="polyempty">india desk error: ${escH(e.message)}</div>`; }
+}
+
+// ---- sectioned layout: menubar tab switcher ----
+function switchTab(name){
+  document.querySelectorAll(".tabpage").forEach(s=>s.classList.toggle("active",s.dataset.tab===name));
+  document.querySelectorAll(".mtab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+  try{ localStorage.setItem("deskTab",name); }catch(e){}
+  if(location.hash!==("#"+name)) history.replaceState(null,"","#"+name);
+  if(name==="polymarket") loadPoly();
+  if(name==="india") loadIndia();
+  if(name==="charts"){
+    // TradingView + lightweight charts size to visible containers: give them
+    // a resize kick so a tab opened hidden renders at full width.
+    window.dispatchEvent(new Event("resize"));
+    if(window.TradingView) buildTV(tvSymbol($("chartAsset")?.value||"BTC"));
+    setTimeout(()=>window.dispatchEvent(new Event("resize")),250);
+  }
+  if(name==="brake"){ try{ drawEquityChart(_lastEquity); }catch(e){} }
+}
+document.querySelectorAll(".mtab").forEach(b=>{
+  b.onclick=()=>switchTab(b.dataset.tab);
+});
+window.addEventListener("hashchange",()=>{
+  const t=(location.hash||"").replace("#","");
+  if(t&&document.querySelector(`.tabpage[data-tab="${t}"]`)) switchTab(t);
+});
+(function initTab(){
+  let t=null;
+  try{ t=localStorage.getItem("deskTab"); }catch(e){}
+  const valid=["desk","charts","brake","backtests","polymarket","india","nifty"];
+  if(location.hash&&valid.includes(location.hash.slice(1))) t=location.hash.slice(1);
+  if(!t||!valid.includes(t)) t="desk";
+  switchTab(t);
+})();
+setInterval(loadPoly,60000);
 </script>
 </body></html>"""
 
