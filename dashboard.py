@@ -648,29 +648,95 @@ def backtest_analyses():
 @app.get("/api/brake/live")
 def brake_live():
     """On-demand FRESH brake status straight from the exchange (bypasses the hourly
-    cache). Slower (~2-3s) — only runs when the button is clicked."""
+    cache). Slower (~2-3s) — only runs when the button is clicked.
+
+    Returns rich per-coin data: price, 200-day SMA, gap%, trend direction (widening
+    or narrowing vs yesterday), days since flip, and a mismatch flag if the Braked
+    Hold bot's open positions don't match what the brake says."""
     import brake_alerts as ba
     watch = ba.load_json(ba.WATCHLIST, {"coins": ba.DEFAULT_WATCH}).get("coins", ba.DEFAULT_WATCH)
     src, ex = ba.pick_exchange()
     if ex is None:
         return JSONResponse({"error": "no exchange reachable right now"})
+
+    # Load cached state for "days since flip" and trend direction
+    cached = {}
+    if os.path.exists(BRAKE_STATE):
+        try:
+            cached = json.load(open(BRAKE_STATE))
+        except Exception:
+            pass
+
+    # Load the Braked Hold bot's actual open positions for mismatch detection
+    bot_holding = set()
+    bot_balance = 0.0
+    try:
+        conn = sqlite3.connect(os.path.join(BASE, "tradesv3_brakedhold.sqlite"))
+        conn.row_factory = sqlite3.Row
+        for r in conn.execute("SELECT pair FROM trades WHERE is_open=1"):
+            bot_holding.add(r["pair"].replace("/USDT", ""))
+        conn.close()
+    except Exception:
+        pass
+
     coins = []
     for c in watch:
         try:
-            st, price, sma = ba.brake_state(ex, c)
-            coins.append({"coin": c, "state": st, "price": price,
-                          "gap": (price / sma - 1) * 100})
+            ohlcv = ex.fetch_ohlcv(f"{c}/USDT", timeframe="1d", limit=ba.FETCH_LIMIT)
+            closes = [bar[4] for bar in ohlcv][:-1]  # drop today's forming candle
+            if len(closes) < ba.MA_LEN:
+                coins.append({"coin": c, "error": f"only {len(closes)} candles"})
+                continue
+            price = closes[-1]
+            sma = sum(closes[-ba.MA_LEN:]) / ba.MA_LEN
+            gap = (price / sma - 1) * 100
+            state = "above" if price >= sma else "below"
+
+            # Trend direction: is the gap widening or narrowing vs yesterday?
+            prev_price = closes[-2] if len(closes) >= 2 else price
+            prev_sma = sum(closes[-ba.MA_LEN-1:-1]) / ba.MA_LEN if len(closes) > ba.MA_LEN else sma
+            prev_gap = (prev_price / prev_sma - 1) * 100
+            trend = "widening" if abs(gap) > abs(prev_gap) else "narrowing"
+
+            # Days since last flip
+            since = cached.get(c, {}).get("since", "")
+            days_since = 0
+            if since:
+                try:
+                    from datetime import datetime, timezone
+                    days_since = (datetime.now(timezone.utc) - datetime.fromisoformat(since)).days
+                except Exception:
+                    pass
+
+            # Mismatch: bot is holding a coin below its 200-day, or NOT holding one above
+            bot_has = c in bot_holding
+            mismatch = (state == "above" and not bot_has) or (state == "below" and bot_has)
+
+            coins.append({
+                "coin": c, "state": state, "price": price, "sma": sma,
+                "gap": gap, "trend": trend, "days_since_flip": days_since,
+                "bot_holding": bot_has, "mismatch": mismatch,
+                "dist_to_flip": abs(gap),  # % move needed to cross the line
+            })
         except Exception as e:
             coins.append({"coin": c, "error": str(e)[:40]})
+
     coins.sort(key=lambda c: (c.get("state") != "above", -(c.get("gap") if c.get("gap") is not None else -999)))
-    return JSONResponse({"source": src, "coins": coins,
-                         "hold": sum(1 for c in coins if c.get("state") == "above"),
-                         "total": len(coins)})
+    hold_count = sum(1 for c in coins if c.get("state") == "above")
+    mismatch_count = sum(1 for c in coins if c.get("mismatch"))
+    return JSONResponse({
+        "source": src, "coins": coins,
+        "hold": hold_count, "total": len(coins),
+        "mismatches": mismatch_count,
+        "bot_holding": sorted(list(bot_holding)),
+        "regime": "bull" if hold_count > len(coins) * 0.7 else "bear" if hold_count < len(coins) * 0.3 else "mixed",
+    })
 
 
 @app.get("/api/memory/full")
 def memory_full():
-    """The complete track-record text (same as the /memory Telegram command)."""
+    """Structured track record for the dashboard — episodes, open positions,
+    performance metrics, and the full text summary."""
     import brake_memory
     prices = {}
     if os.path.exists(BRAKE_STATE):
@@ -678,7 +744,75 @@ def memory_full():
             prices = {c: d.get("price") for c, d in json.load(open(BRAKE_STATE)).items()}
         except Exception:
             pass
-    return JSONResponse({"text": brake_memory.summary(prices)})
+
+    e = brake_memory._load()
+    closed = e.get("closed", [])
+    open_trades = e.get("open", {})
+
+    # Build structured episode list
+    episodes = []
+    for c in closed:
+        unreal = None
+        if prices.get(c["coin"]) and c.get("exit_price"):
+            unreal = (prices[c["coin"]] / c["exit_price"] - 1) * 100
+        episodes.append({
+            "coin": c["coin"], "entry_ts": c.get("entry_ts","")[:10],
+            "exit_ts": c.get("exit_ts","")[:10], "entry_price": c.get("entry_price",0),
+            "exit_price": c.get("exit_price",0), "ret_pct": c.get("ret_pct",0),
+            "days": c.get("days",0), "note": c.get("note",""),
+        })
+
+    # Build open positions with live unrealized P&L
+    open_list = []
+    for coin, d in open_trades.items():
+        entry_price = d.get("entry_price", 0)
+        cur_price = prices.get(coin)
+        unreal = (cur_price / entry_price - 1) * 100 if cur_price and entry_price else None
+        held = brake_memory._days(d.get("entry_ts",""), brake_memory._now())
+        open_list.append({
+            "coin": coin, "since": d.get("entry_ts","")[:10], "days": held,
+            "entry_price": entry_price, "current_price": cur_price, "unreal": unreal,
+        })
+
+    # Compute metrics
+    wins = [c for c in closed if c.get("ret_pct",0) > 0]
+    losses = [c for c in closed if c.get("ret_pct",0) <= 0]
+    gross_wins = sum(c["ret_pct"] for c in wins)
+    gross_losses = abs(sum(c["ret_pct"] for c in losses))
+    pf = gross_wins / gross_losses if gross_losses > 0 else None
+    avg_win = sum(c["ret_pct"] for c in wins) / len(wins) if wins else None
+    avg_loss = sum(c["ret_pct"] for c in losses) / len(losses) if losses else None
+    avg_days = sum(c.get("days",0) for c in closed) / len(closed) if closed else None
+
+    # Equity curve (compounded)
+    equity = [100.0]
+    for c in closed:
+        equity.append(equity[-1] * (1 + c.get("ret_pct",0) / 100))
+
+    # Add unrealized to current equity
+    total_unreal = 0
+    for o in open_list:
+        if o["unreal"] is not None:
+            total_unreal += o["unreal"]
+
+    return JSONResponse({
+        "text": brake_memory.summary(prices),
+        "stats": {
+            "completed": len(closed),
+            "win_rate": len(wins) / len(closed) * 100 if closed else None,
+            "profit_factor": round(pf, 2) if pf else None,
+            "avg_ret": sum(c.get("ret_pct",0) for c in closed) / len(closed) if closed else None,
+            "avg_win": avg_win, "avg_loss": avg_loss,
+            "avg_days": avg_days,
+            "best": max(closed, key=lambda c: c.get("ret_pct",0)) if closed else None,
+            "worst": min(closed, key=lambda c: c.get("ret_pct",0)) if closed else None,
+            "total_return_pct": (equity[-1] / 100 - 1) * 100,
+            "unrealized_pct": total_unreal,
+        },
+        "episodes": episodes,
+        "open": open_list,
+        "equity": equity,
+    })
 
 
 # ---- Polymarket copy-trading bot endpoints ----
@@ -1057,6 +1191,42 @@ PAGE = r"""<!doctype html>
   .coin .c{font-family:var(--mono);font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;}
   .coin .c .s{width:8px;height:8px;border-radius:50%;}
   .coin .g{font-family:var(--mono);font-size:11.5px;margin-top:5px;}
+  /* ---- Brake live & Memory modal styles ---- */
+  .brake-regime{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-family:var(--mono);font-size:12px;font-weight:600;}
+  .brake-regime.bull{background:rgba(63,199,168,.15);color:var(--teal);}
+  .brake-regime.bear{background:rgba(229,103,78,.15);color:var(--brick);}
+  .brake-regime.mixed{background:rgba(240,168,60,.15);color:var(--amber);}
+  .brake-mismatch-banner{background:rgba(229,103,78,.08);border:1px solid var(--brick);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12.5px;color:var(--brick);display:flex;align-items:center;gap:8px;}
+  .brake-mismatch-banner.ok{background:rgba(63,199,168,.08);border-color:var(--teal);color:var(--teal);}
+  .coin2{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;position:relative;}
+  .coin2.hold{border-left:3px solid var(--teal);}
+  .coin2.cash{border-left:3px solid var(--brick);}
+  .coin2.mismatch{box-shadow:0 0 0 2px var(--amber) inset;}
+  .coin2 .c2head{display:flex;justify-content:space-between;align-items:center;}
+  .coin2 .c2name{font-family:var(--mono);font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;}
+  .coin2 .c2name .s{width:8px;height:8px;border-radius:50%;}
+  .coin2 .c2bot{font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:4px;background:var(--surface-2);color:var(--muted);}
+  .coin2 .c2bot.yes{background:rgba(63,199,168,.12);color:var(--teal);}
+  .coin2 .c2bot.no{background:rgba(229,103,78,.1);color:var(--brick);}
+  .coin2 .c2gap{font-family:var(--mono);font-size:18px;font-weight:700;margin-top:6px;}
+  .coin2 .c2meta{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap;}
+  .coin2 .c2trend{font-size:10px;padding:1px 5px;border-radius:3px;}
+  .coin2 .c2trend.widening{background:rgba(229,103,78,.1);color:var(--brick);}
+  .coin2 .c2trend.narrowing{background:rgba(63,199,168,.1);color:var(--teal);}
+  .mem-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px;}
+  .mem-metric{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
+  .mem-metric .ml{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);}
+  .mem-metric .mv{font-family:var(--mono);font-size:20px;font-weight:700;margin-top:3px;}
+  .mem-table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:12px;}
+  .mem-table th{background:var(--surface-2);color:var(--muted);font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;padding:6px 8px;text-align:left;}
+  .mem-table td{padding:6px 8px;border-bottom:1px solid var(--line);font-family:var(--mono);}
+  .mem-table tr.win td{color:var(--teal);}
+  .mem-table tr.loss td{color:var(--brick);}
+  .mem-equity{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;}
+  .mem-equity canvas{max-height:200px;}
+  .mem-detail{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:10px;}
+  .mem-detail summary{cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+  .mem-detail pre{font-family:var(--mono);font-size:11px;color:var(--text);white-space:pre-wrap;margin-top:8px;line-height:1.5;}
   .brakehead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;}
   .chartcard{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:12px;}
   #pricechart{width:100%;height:600px;}
@@ -1827,6 +1997,9 @@ function setTheme(t){
   localStorage.setItem("deskTheme",t);
   $("themeToggle").textContent = t==="light" ? "🌙 Dark mode" : "☀️ Light mode";
   applyChartTheme();
+  // propagate theme to the Nifty 5m iframe
+  const nf=document.querySelector('iframe[src^="/nifty/"]');
+  if(nf && nf.contentWindow) nf.contentWindow.postMessage({type:"theme",theme:t},"*");
   // rebuild the TradingView widget so it matches the theme (only once it's loaded)
   if(typeof _tvView!=="undefined" && _tvView==="trader" && window.TradingView)
     buildTV(tvSymbol($("chartAsset").value||"BTC"));
@@ -2439,15 +2612,41 @@ $("btnBrake").onclick=async()=>{
     const d=await (await fetch("/api/brake/live",{cache:"no-store"})).json();
     if(d.error){ openModal("🪂 Brake — live",`<div class="sparkempty">${d.error}</div>`); }
     else{
+      const regimeLabel=d.regime==="bull"?"🟢 BULL MARKET":d.regime==="bear"?"🔴 BEAR MARKET":"🟡 MIXED";
+      const mmCount=d.mismatches||0;
+      const mmBanner=mmCount>0
+        ?`<div class="brake-mismatch-banner">⚠️ <strong>${mmCount} mismatch${mmCount>1?"es":""}</strong> — the bot's positions don't match what the 200-day brake says. Highlighted coins below.</div>`
+        :`<div class="brake-mismatch-banner ok">✓ Bot positions match the brake — no mismatches</div>`;
       const grid=d.coins.map(c=>{
-        if(c.error) return `<div class="coin cash"><div class="c">${c.coin}</div><div class="g" style="color:var(--faint)">err</div></div>`;
+        if(c.error) return `<div class="coin2 cash"><div class="c2name">${c.coin}</div><div class="c2meta" style="color:var(--faint)">err: ${c.error}</div></div>`;
         const hold=c.state==="above";
-        return `<div class="coin ${hold?'hold':'cash'}"><div class="c"><i class="s" style="background:${hold?'var(--teal)':'var(--brick)'}"></i>${c.coin}</div>
-          <div class="g ${hold?'pos':'neg'}">${hold?'HOLD':'CASH'} ${(c.gap>=0?'+':'')+c.gap.toFixed(0)}%</div>
-          <div class="g" style="color:var(--faint)">${price(c.price)}</div></div>`;
+        const dotColor=hold?"var(--teal)":"var(--brick)";
+        const botTag=c.bot_holding
+          ?`<span class="c2bot yes">BOT HOLDING</span>`
+          :`<span class="c2bot no">NOT HELD</span>`;
+        const mmClass=c.mismatch?" mismatch":"";
+        const trendTag=c.trend==="widening"
+          ?`<span class="c2trend widening">↗ widening</span>`
+          :`<span class="c2trend narrowing">↘ narrowing</span>`;
+        const flipDir=hold?`needs -${c.dist_to_flip.toFixed(1)}% to flip to CASH`:`needs +${c.dist_to_flip.toFixed(1)}% to flip to HOLD`;
+        const daysTag=c.days_since_flip>0?`${c.days_since_flip}d since flip`:"";
+        return `<div class="coin2 ${hold?'hold':'cash'}${mmClass}">
+          <div class="c2head">
+            <div class="c2name"><i class="s" style="background:${dotColor}"></i>${c.coin}</div>
+            ${botTag}
+          </div>
+          <div class="c2gap ${hold?'pos':'neg'}">${hold?'HOLD':'CASH'} ${(c.gap>=0?'+':'')+c.gap.toFixed(1)}%</div>
+          <div class="c2meta">${trendTag} ${daysTag?`· ${daysTag}`:""} · ${flipDir}</div>
+          <div class="c2meta" style="margin-top:2px">price ${price(c.price)} · 200DMA ${price(c.sma)}</div>
+        </div>`;
       }).join("");
       openModal("🪂 Brake — live check",
-        `<div class="msub">${d.hold}/${d.total} holding · live from ${d.source} · ${new Date().toLocaleTimeString()}</div><div class="mboard">${grid}</div>`);
+        `<div class="msub" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <span><span class="brake-regime ${d.regime}">${regimeLabel}</span> ${d.hold}/${d.total} holding</span>
+          <span>live from ${d.source} · ${new Date().toLocaleTimeString()}</span>
+        </div>
+        ${mmBanner}
+        <div class="mboard">${grid}</div>`);
     }
   }catch(e){ openModal("🪂 Brake — live",`<div class="sparkempty">error: ${e.message}</div>`); }
   b.disabled=false; b.textContent=t;
@@ -2457,7 +2656,73 @@ $("btnMem").onclick=async()=>{
   const b=$("btnMem"),t=b.textContent; b.disabled=true; b.textContent="loading…";
   try{
     const d=await (await fetch("/api/memory/full",{cache:"no-store"})).json();
-    openModal("🧠 Brake memory — full record",`<pre>${(d.text||"").replace(/[&<]/g,s=>s==="&"?"&amp;":"&lt;")}</pre>`);
+    const s=d.stats||{};
+    const ep=d.episodes||[];
+    const op=d.open||[];
+    const eq=d.equity||[100];
+
+    // Metric cards
+    const mv=(v,suffix="",color="")=>`<div class="mv ${color}">${v===null||v===undefined?"—":v.toFixed(1)+suffix}</div>`;
+    const metrics=`<div class="mem-metrics">
+      <div class="mem-metric"><div class="ml">Completed</div>${mv(s.completed,"","")}</div>
+      <div class="mem-metric"><div class="ml">Win rate</div>${mv(s.win_rate,"%",s.win_rate>=50?"pos":"neg")}</div>
+      <div class="mem-metric"><div class="ml">Profit factor</div><div class="mv">${s.profit_factor||"—"}</div></div>
+      <div class="mem-metric"><div class="ml">Avg return</div>${mv(s.avg_ret,"%",s.avg_ret>=0?"pos":"neg")}</div>
+      <div class="mem-metric"><div class="ml">Avg win</div>${mv(s.avg_win,"%","pos")}</div>
+      <div class="mem-metric"><div class="ml">Avg loss</div>${mv(s.avg_loss,"%","neg")}</div>
+      <div class="mem-metric"><div class="ml">Avg hold</div><div class="mv">${s.avg_days?s.avg_days.toFixed(0)+"d":"—"}</div></div>
+      <div class="mem-metric"><div class="ml">Total return</div>${mv(s.total_return_pct,"%",s.total_return_pct>=0?"pos":"neg")}</div>
+      <div class="mem-metric"><div class="ml">Unrealized</div>${mv(s.unrealized_pct,"%",s.unrealized_pct>=0?"pos":"neg")}</div>
+    </div>`;
+
+    // Equity curve (mini sparkline using inline SVG)
+    const eqMin=Math.min(...eq), eqMax=Math.max(...eq);
+    const eqRange=eqMax-eqMin||1;
+    const eqPts=eq.map((v,i)=>`${(i/(eq.length-1||1))*100},${100-((v-eqMin)/eqRange)*90-5}`).join(" ");
+    const eqColor=eq[eq.length-1]>=eq[0]?"var(--teal)":"var(--brick)";
+    const equityChart=eq.length>1?`<div class="mem-equity">
+      <div class="label" style="margin-bottom:8px">Equity curve (compounded)</div>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:180px">
+        <polyline points="${eqPts}" fill="none" stroke="${eqColor}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+      </svg>
+    </div>`:"";
+
+    // Open positions table
+    const openRows=op.length?op.map(o=>{
+      const u=o.unreal===null||o.unreal===undefined?"—":(o.unreal>=0?"+":"")+o.unreal.toFixed(1)+"%";
+      const uClass=o.unreal>=0?"pos":"neg";
+      return `<tr><td>${o.coin}</td><td>${o.since}</td><td>${o.days}d</td>
+        <td>${o.entry_price?price(o.entry_price):"—"}</td>
+        <td>${o.current_price?price(o.current_price):"—"}</td>
+        <td class="${uClass}">${u}</td></tr>`;
+    }).join(""):`<tr><td colspan="6" style="color:var(--faint);text-align:center;padding:16px">No open positions</td></tr>`;
+    const openTable=`<div class="label" style="margin-bottom:6px">Open positions (${op.length})</div>
+      <table class="mem-table"><thead><tr><th>Coin</th><th>Since</th><th>Held</th><th>Entry</th><th>Current</th><th>Unrealized</th></tr></thead>
+      <tbody>${openRows}</tbody></table>`;
+
+    // Closed episodes table
+    const epRows=ep.length?ep.map(e=>{
+      const cls=e.ret_pct>0?"win":"loss";
+      return `<tr class="${cls}"><td>${e.coin}</td><td>${e.entry_ts}</td><td>${e.exit_ts}</td>
+        <td>${e.days}d</td><td>${e.entry_price?price(e.entry_price):"—"}</td>
+        <td>${e.exit_price?price(e.exit_price):"—"}</td>
+        <td>${e.ret_pct>=0?"+":""}${e.ret_pct.toFixed(1)}%</td></tr>`;
+    }).join(""):`<tr><td colspan="7" style="color:var(--faint);text-align:center;padding:16px">No completed holds yet — the record builds as coins flip back to cash</td></tr>`;
+    const epTable=`<div class="label" style="margin-bottom:6px">Completed hold episodes (${ep.length})</div>
+      <table class="mem-table"><thead><tr><th>Coin</th><th>Entry</th><th>Exit</th><th>Days</th><th>Entry $</th><th>Exit $</th><th>Return</th></tr></thead>
+      <tbody>${epRows}</tbody></table>`;
+
+    // Best/worst
+    const bw=(s.best||s.worst)?`<div style="display:flex;gap:12px;margin-bottom:14px">
+      ${s.best?`<div class="mem-metric" style="flex:1"><div class="ml">Best trade</div><div class="mv pos">${s.best.coin} +${s.best.ret_pct.toFixed(1)}%</div></div>`:""}
+      ${s.worst?`<div class="mem-metric" style="flex:1"><div class="ml">Worst trade</div><div class="mv neg">${s.worst.coin} ${s.worst.ret_pct.toFixed(1)}%</div></div>`:""}
+    </div>`:"";
+
+    // Full text record (collapsible)
+    const detail=`<details class="mem-detail"><summary>Full text record (Telegram format)</summary><pre>${(d.text||"").replace(/[&<]/g,s=>s==="&"?"&amp;":"&lt;")}</pre></details>`;
+
+    openModal("🧠 Brake memory — full record",
+      `${metrics}${bw}${equityChart}${openTable}${epTable}${detail}`);
   }catch(e){ openModal("🧠 Memory",`<div class="sparkempty">error: ${e.message}</div>`); }
   b.disabled=false; b.textContent=t;
 };
