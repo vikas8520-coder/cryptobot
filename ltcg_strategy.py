@@ -26,6 +26,13 @@ DEFAULTS = {
     "enter_tag": "golden_cross",
     "exit_reason": "dma_breakdown",
     "max_hold_cycles": 0,      # No time-stop — let the 200DMA decide
+    "stop_loss_pct": 0.08,     # hard stop loss as fraction of entry price (0 = disabled).
+                               #   audit 2026-08-24: the 200DMA breakdown exit with 5-day
+                               #   confirmation can let losses run 10%+ before triggering.
+                               #   An 8% stop is wider than the dividend bots (5%) because
+                               #   NIFTYBEES is less volatile than single stocks, and we
+                               #   want to avoid getting stopped out by normal pullbacks
+                               #   toward the 200DMA.
     "dma_filter": 0,            # 200DMA is the exit signal, not entry filter
     "breakdown_days": 5,        # Days below 200DMA before exit (reduces whipsaw)
 }
@@ -144,7 +151,8 @@ class LTCGStrategy:
         dma = self._dma()
         golden_cross = self._golden_cross()
 
-        # Exit logic: breakdown below 200DMA for consecutive days
+        # Exit logic: breakdown below 200DMA for consecutive days, or hard stop loss
+        stop_pct = float(self.params.get("stop_loss_pct", 0) or 0)
         for t in opens:
             if dma is not None and self._last_price < dma:
                 self._below_dma_count += 1
@@ -154,6 +162,14 @@ class LTCGStrategy:
             if self._below_dma_count >= breakdown_days:
                 return {"action": "exit", "trade_id": t.get("trade_id"),
                         "exit_reason": str(self.params["exit_reason"])}
+            # audit 2026-08-24: hard stop loss — 200DMA breakdown can take 5+ days to
+            # trigger, during which a sharp drop can do 10%+ damage. Caps it at 8%.
+            if stop_pct > 0:
+                entry_rate = float(t.get("open_rate") or t.get("entry_rate") or 0)
+                if entry_rate > 0 and self._last_price is not None:
+                    if (float(self._last_price) - entry_rate) / entry_rate <= -stop_pct:
+                        return {"action": "exit", "trade_id": t.get("trade_id"),
+                                "exit_reason": "stop_loss"}
 
         # Entry logic: golden cross only
         if paused:

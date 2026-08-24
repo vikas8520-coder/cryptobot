@@ -65,6 +65,11 @@ DEFAULTS = {
     "enter_tag": "div_dma",
     "exit_reason": "sma_cross_down",
     "max_hold_cycles": 0,      # 0 = exit only on the down-cross; >0 = also time-stop
+    "stop_loss_pct": 0.05,     # hard stop loss as fraction of entry price (0 = disabled).
+                               #   audit 2026-08-24: without a stop, ONGC lost -₹317 on one
+                               #   trade and ITC lost -₹3,083 — the SMA down-cross was too
+                               #   slow to exit. A 5% stop caps damage while preserving the
+                               #   dividend capture thesis (dividends accrue regardless).
 }
 
 
@@ -208,8 +213,9 @@ class DividendStrategy:
 
         cross = self._cross()   # +1 up-cross, -1 down-cross, 0 none/insufficient
 
-        # EXITS BEAT ENTRIES: close on a down-cross, or on the optional time-stop. Note the
+        # EXITS BEAT ENTRIES: close on a down-cross, stop-loss, or time-stop. Note the
         # 200-DMA filter is NOT consulted here — it gates getting in, never getting out.
+        stop_pct = float(self.params.get("stop_loss_pct", 0) or 0)
         for t in opens:
             try:
                 age = cycle - int(t.get("open_cycle", cycle))
@@ -218,6 +224,15 @@ class DividendStrategy:
             if cross < 0:
                 return {"action": "exit", "trade_id": t.get("trade_id"),
                         "exit_reason": str(self.params["exit_reason"])}
+            # audit 2026-08-24: hard stop loss — without it, ITC lost ₹3,083 on one trade
+            # because the SMA down-cross took days to trigger. Caps damage at 5%.
+            if stop_pct > 0:
+                entry_rate = float(t.get("open_rate") or t.get("entry_rate") or 0)
+                cur_price = self._last_price
+                if entry_rate > 0 and cur_price is not None:
+                    if (float(cur_price) - entry_rate) / entry_rate <= -stop_pct:
+                        return {"action": "exit", "trade_id": t.get("trade_id"),
+                                "exit_reason": "stop_loss"}
             if hold > 0 and age >= hold:
                 return {"action": "exit", "trade_id": t.get("trade_id"),
                         "exit_reason": "time_stop"}
