@@ -129,30 +129,44 @@ def _html():
         """
 
     html = f"""<!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="refresh" content="60">
   <title>Nifty 5m Paper Trading Desk</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; background:#0f1115; color:#e0e0e0; }}
-    h1 {{ margin-bottom:.2rem; }}
-    .subtitle {{ color:#888; font-size:.9rem; margin-bottom:1.5rem; }}
-    .grid {{ display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:1rem; margin-bottom:1.5rem; }}
-    .card {{ background:#181b21; border-radius:8px; padding:1rem; border:1px solid #2a2d35; }}
-    .card .label {{ color:#888; font-size:.8rem; text-transform:uppercase; }}
-    .card .value {{ font-size:1.6rem; font-weight:600; margin-top:.3rem; }}
-    .positive {{ color:#2ecc71; }}
-    .negative {{ color:#e74c3c; }}
-    table {{ width:100%; border-collapse:collapse; background:#181b21; border-radius:8px; overflow:hidden; margin-bottom:1.5rem; }}
-    th, td {{ padding:.6rem .8rem; text-align:left; border-bottom:1px solid #2a2d35; font-size:.9rem; }}
-    th {{ background:#22262d; color:#aaa; }}
-    .win td.pnl {{ color:#2ecc71; }}
-    .loss td.pnl {{ color:#e74c3c; }}
-    .section {{ margin-bottom:2rem; }}
-    .log {{ background:#181b21; border-radius:8px; padding:1rem; font-family:monospace; font-size:.85rem; max-height:250px; overflow:auto; white-space:pre-line; border:1px solid #2a2d35; }}
-    canvas {{ max-height:320px; }}
+    :root {{
+      --ground:#0E1420; --surface:#161E2E; --surface-2:#1C2739; --line:#26314A;
+      --text:#E6EAF2; --muted:#8A97B2; --faint:#5C6884;
+      --amber:#F0A83C; --teal:#3FC7A8; --brick:#E5674E;
+      --mono:ui-monospace,"SF Mono","Menlo","Consolas",monospace;
+      --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    }}
+    :root[data-theme="light"] {{
+      --ground:#F1F4F9; --surface:#FFFFFF; --surface-2:#EDF1F7; --line:#DBE1EC;
+      --text:#16202E; --muted:#586880; --faint:#93A0B4;
+      --amber:#C77E12; --teal:#1A9C80; --brick:#CD4B32;
+    }}
+    * {{ box-sizing:border-box; }}
+    body {{ font-family:var(--sans); margin:1.5rem; background:var(--ground); color:var(--text); transition:background .15s,color .15s; }}
+    h1 {{ margin-bottom:.2rem; font-size:1.4rem; }}
+    h3 {{ font-size:1.05rem; margin-bottom:.5rem; }}
+    .subtitle {{ color:var(--faint); font-size:.85rem; margin-bottom:1.2rem; }}
+    .grid {{ display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap:.8rem; margin-bottom:1.2rem; }}
+    .card {{ background:var(--surface); border-radius:10px; padding:.9rem; border:1px solid var(--line); }}
+    .card .label {{ color:var(--faint); font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; }}
+    .card .value {{ font-size:1.4rem; font-weight:600; margin-top:.2rem; font-variant-numeric:tabular-nums; }}
+    .positive {{ color:var(--teal); }}
+    .negative {{ color:var(--brick); }}
+    table {{ width:100%; border-collapse:collapse; background:var(--surface); border-radius:10px; overflow:hidden; margin-bottom:1.2rem; border:1px solid var(--line); }}
+    th, td {{ padding:.5rem .7rem; text-align:left; border-bottom:1px solid var(--line); font-size:.85rem; }}
+    th {{ background:var(--surface-2); color:var(--muted); font-weight:600; }}
+    .win td.pnl {{ color:var(--teal); }}
+    .loss td.pnl {{ color:var(--brick); }}
+    .section {{ margin-bottom:1.5rem; }}
+    .log {{ background:var(--surface); border-radius:10px; padding:.8rem; font-family:var(--mono); font-size:.8rem; max-height:220px; overflow:auto; white-space:pre-line; border:1px solid var(--line); color:var(--muted); }}
+    canvas {{ max-height:300px; }}
   </style>
 </head>
 <body>
@@ -201,17 +215,49 @@ def _html():
   </div>
 
   <script>
+    // ---- theme sync with parent dashboard (same-origin, direct read) ----
+    function applyTheme(t) {{
+      document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+      if (window._chart) {{
+        const s = getComputedStyle(document.documentElement);
+        window._chart.data.datasets[0].borderColor = s.getPropertyValue("--teal").trim();
+        window._chart.data.datasets[0].backgroundColor = s.getPropertyValue("--teal").trim() + "20";
+        window._chart.options.scales.y.grid.color = s.getPropertyValue("--line").trim();
+        window._chart.options.scales.y.ticks.color = s.getPropertyValue("--muted").trim();
+        window._chart.update("none");
+      }}
+    }}
+    function parentTheme() {{
+      try {{ return parent.document.documentElement.getAttribute("data-theme") || "dark"; }}
+      catch(e) {{ return "dark"; }}
+    }}
+    let _curTheme = parentTheme();
+    applyTheme(_curTheme);
+    // watch parent's <html data-theme> for instant updates
+    try {{
+      new MutationObserver(() => {{
+        const t = parentTheme();
+        if (t !== _curTheme) {{ _curTheme = t; applyTheme(t); }}
+      }}).observe(parent.document.documentElement, {{ attributes:true, attributeFilter:["data-theme"] }});
+    }} catch(e) {{}}
+    // backup: postMessage from parent
+    window.addEventListener("message", e => {{
+      if (e.data && e.data.type === "theme") {{ _curTheme = e.data.theme; applyTheme(e.data.theme); }}
+    }});
+
+    // ---- equity chart ----
     const ctx = document.getElementById('equityChart').getContext('2d');
     const data = {equity_json};
-    new Chart(ctx, {{
+    const s0 = getComputedStyle(document.documentElement);
+    window._chart = new Chart(ctx, {{
       type: 'line',
       data: {{
         labels: data.map((_, i) => i),
         datasets: [{{
           label: 'Equity (₹)',
           data: data,
-          borderColor: '#2ecc71',
-          backgroundColor: 'rgba(46, 204, 113, 0.1)',
+          borderColor: s0.getPropertyValue("--teal").trim() || "#3FC7A8",
+          backgroundColor: (s0.getPropertyValue("--teal").trim() || "#3FC7A8") + "20",
           tension: 0.2,
           fill: true,
           pointRadius: 2
@@ -222,7 +268,7 @@ def _html():
         maintainAspectRatio: false,
         scales: {{
           x: {{ display: false }},
-          y: {{ grid: {{ color: '#2a2d35' }} }}
+          y: {{ grid: {{ color: s0.getPropertyValue("--line").trim() }}, ticks: {{ color: s0.getPropertyValue("--muted").trim() }} }}
         }},
         plugins: {{ legend: {{ display: false }} }}
       }}
