@@ -645,6 +645,62 @@ def backtest_analyses():
     return JSONResponse(out)
 
 
+# ---- Nifty Orderflow bot (Tier 1: VP + HA Reversal) ----
+ORDERFLOW_DB = "/Users/vikasreddy/cryptobot/nifty_orderflow_trades.sqlite"
+
+@app.get("/api/orderflow/stats")
+def orderflow_stats():
+    """Read orderflow paper trade stats from the separate SQLite DB."""
+    import sqlite3
+    stats = {"trades": 0, "wins": 0, "losses": 0, "win_rate_pct": 0,
+             "profit_factor": 0, "total_pnl": 0, "total_return_pct": 0,
+             "max_drawdown_pct": 0, "avg_win": 0, "avg_loss": 0, "equity": []}
+    open_trades = []
+    try:
+        conn = sqlite3.connect(ORDERFLOW_DB)
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM trades ORDER BY entry_time")
+        rows = cur.fetchall()
+        cols = [d[0] for d in cur.description]
+        trades = [dict(zip(cols, r)) for r in rows]
+        closed = [t for t in trades if t.get("status") == "closed"]
+        open_trades = [t for t in trades if t.get("status") == "open"]
+        if closed:
+            wins = [t for t in closed if (t.get("pnl_trade") or 0) > 0]
+            losses = [t for t in closed if (t.get("pnl_trade") or 0) <= 0]
+            stats["trades"] = len(closed)
+            stats["wins"] = len(wins)
+            stats["losses"] = len(losses)
+            stats["win_rate_pct"] = round(len(wins) / len(closed) * 100, 1)
+            stats["total_pnl"] = round(sum(t.get("pnl_trade") or 0 for t in closed), 2)
+            gw = sum(t.get("pnl_trade") or 0 for t in wins)
+            gl = abs(sum(t.get("pnl_trade") or 0 for t in losses))
+            stats["profit_factor"] = round(gw / gl, 2) if gl > 0 else 0
+            stats["avg_win"] = round(sum(t.get("pnl_trade") or 0 for t in wins) / len(wins), 2) if wins else 0
+            stats["avg_loss"] = round(sum(t.get("pnl_trade") or 0 for t in losses) / len(losses), 2) if losses else 0
+            cap = 100000.0
+            stats["total_return_pct"] = round(stats["total_pnl"] / cap * 100, 2)
+            # equity curve + max drawdown
+            eq = 0
+            peak = 0
+            max_dd = 0
+            curve = []
+            for t in closed:
+                eq += t.get("pnl_trade") or 0
+                curve.append(round(eq, 2))
+                if eq > peak: peak = eq
+                dd = peak - eq
+                if dd > max_dd: max_dd = dd
+            stats["equity"] = curve
+            stats["max_drawdown_pct"] = round(max_dd / cap * 100, 2)
+        conn.close()
+    except Exception as e:
+        stats["error"] = str(e)
+    return {"stats": stats, "open": [{"side": t.get("side"), "opt_type": t.get("opt_type"),
+            "strike": t.get("strike"), "entry_time": t.get("entry_time"),
+            "lots": t.get("lots")} for t in open_trades]}
+
+
 @app.get("/api/brake/live")
 def brake_live():
     """On-demand FRESH brake status straight from the exchange (bypasses the hourly
@@ -1480,6 +1536,14 @@ PAGE = r"""<!doctype html>
       <span class="label" style="color:var(--faint)" id="niftyLast">paper · no orders · 2% risk</span>
     </div>
     <div id="niftyDesk"><div style="color:var(--faint);padding:8px 0">loading…</div></div>
+  </div>
+
+  <div class="pfcard" style="margin-top:14px">
+    <div class="brakehead" style="margin-top:0">
+      <h2 class="sec">Nifty Orderflow bot (Tier 1)</h2>
+      <span class="label" style="color:var(--faint)" id="orderflowLast">paper · VP + HA reversal · 6%/2%</span>
+    </div>
+    <div id="orderflowDesk"><div style="color:var(--faint);padding:8px 0">loading…</div></div>
   </div>
   </section>
 
@@ -2469,6 +2533,42 @@ async function loadNiftyPaperDesk(){
   }
 }
 
+let orderflowBusy=false;
+async function loadOrderflowDesk(){
+  if(orderflowBusy) return;
+  orderflowBusy=true;
+  try{
+    const r=await fetch("/api/orderflow/stats",{cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const d=await r.json();
+    const s=d.stats||{};
+    let html=`<div class="fund" style="gap:18px 34px">`
+      +`<div><span class="label">Trades</span><b style="font-size:20px">${s.trades||0}</b></div>`
+      +`<div><span class="label">Win rate</span><b style="font-size:20px">${s.win_rate_pct||0}%</b></div>`
+      +`<div><span class="label">Profit factor</span><b style="font-size:20px">${s.profit_factor||0}</b></div>`
+      +`<div><span class="label">Total P&amp;L</span><b class="${(s.total_pnl||0)>=0?'pos':'neg'}" style="font-size:20px">₹${(s.total_pnl||0).toFixed(0)}</b></div>`
+      +`<div><span class="label">Max DD</span><b class="neg" style="font-size:20px">${s.max_drawdown_pct||0}%</b></div>`
+      +`</div>`;
+    if(s.equity && s.equity.length>1) html+=`<div style="margin-top:10px">${spark(s.equity)}</div>`;
+    if(d.open && d.open.length){
+      html+=`<div class="label" style="margin-top:14px">Open position</div>`
+        +`<div class="mono" style="font-size:12px">`
+        +d.open.map(o=>`${o.side.toUpperCase()} ${o.opt_type} ${o.strike} @ ${o.entry_time} · lots ${o.lots}`).join(", ")
+        +`</div>`;
+    }
+    if(s.error){
+      html+=`<div style="margin-top:8px;color:var(--faint);font-size:11px">DB: ${s.error}</div>`;
+    }
+    html+=`<div style="margin-top:8px;color:var(--faint);font-size:11px" class="mono">VP + HA Reversal · 9:15-10:00 · 6% target / 2% stop · max 2 trades/day</div>`;
+    $("orderflowDesk").innerHTML=html;
+    $("orderflowLast").textContent=`paper · ${s.trades||0} closed · PF ${s.profit_factor||0}`;
+  }catch(e){
+    $("orderflowDesk").innerHTML=`<div style="color:var(--brick);font-size:12px">Orderflow bot view temporarily unavailable</div>`;
+  }finally{
+    orderflowBusy=false;
+  }
+}
+
 async function tick(){
   if(tickBusy) return;
   tickBusy=true;
@@ -2596,6 +2696,7 @@ async function tick(){
   }finally{
     tickBusy=false;
     loadNiftyPaperDesk();
+    loadOrderflowDesk();
   }
 }
 tick(); setInterval(tick, 15000);
