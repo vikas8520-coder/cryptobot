@@ -89,7 +89,9 @@ def fetch_5m():
 
 def daily_bias_map(df):
     """Map each trading day to the previous day's Heikin-Ashi trend."""
-    daily = df.groupby(df["Date"].dt.normalize()).agg(
+    # Normalize to tz-naive so keys match BhavCopy day keys.
+    dates = df["Date"].dt.tz_localize(None) if df["Date"].dt.tz is not None else df["Date"]
+    daily = df.groupby(dates.dt.normalize()).agg(
         {"Open": "first", "High": "max", "Low": "min", "Close": "last"}
     ).dropna()
     if len(daily) < 2:
@@ -152,6 +154,9 @@ def compute_signal(df, frames):
     side = "call" if call else "put"
     opt_type = "CE" if call else "PE"
     entry_day = pd.Timestamp(df["Date"].iloc[i]).normalize()
+    # BhavCopy day keys are tz-naive; normalize entry_day to match.
+    if entry_day.tz is not None:
+        entry_day = entry_day.tz_localize(None)
 
     if bias_map.get(entry_day) is not None and bias_map.get(entry_day) != side:
         return None
@@ -302,6 +307,9 @@ def main():
             print("no signal", flush=True)
         else:
             bar_dt = pd.Timestamp(alert["bar_time"])
+            # bar_dt may be tz-aware (Asia/Kolkata); normalize for naive datetime.now().
+            if bar_dt.tz is not None:
+                bar_dt = bar_dt.tz_localize(None)
             age_min = (datetime.now() - bar_dt).total_seconds() / 60.0
             if age_min > 15:
                 print(f"stale signal, age={age_min:.1f} min; skipping", flush=True)

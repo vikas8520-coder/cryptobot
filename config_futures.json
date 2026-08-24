@@ -31,13 +31,20 @@
         "order_book_top": 1
     },
     "exchange": {
-        "name": "okx",
+        "name": "binance",
         "enable_ws": false,
         "key": "",
         "secret": "",
-        "password": "",
-        "ccxt_config": {},
-        "ccxt_async_config": {},
+        "ccxt_config": {
+            "options": {
+                "defaultType": "future"
+            }
+        },
+        "ccxt_async_config": {
+            "options": {
+                "defaultType": "future"
+            }
+        },
         "pair_whitelist": [
             "LINK/USDT:USDT",
             "AVAX/USDT:USDT",
