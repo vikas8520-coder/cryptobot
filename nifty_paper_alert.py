@@ -9,8 +9,13 @@ a Telegram alert when a setup appears. Does NOT place any orders. Run with
 Refined rule used here:
 - Heikin-Ashi previous high/low break
 - EMA(10) on High & Low no-trade zone
-- Time window 10:00–14:30 IST
-- 4% option target, 5% option stop
+- Entry window 9:15–10:00 IST (opening hour only — backtest 2026-08-24 showed
+  the opening hour has the best edge: PF 1.37-1.51 vs 0.54-0.92 for other hours.
+  The closing hour (14:00-15:00) loses across ALL target/stop combos because
+  there's not enough time for breakouts to develop before EOD.)
+- Exit monitoring continues until 15:30 so trades opened near 10:00 can hit target/stop
+- 6% option target, 2% option stop (opening hour volatility creates big moves —
+  let winners ride, cut losers fast. Win rate drops to ~39% but PF rises to 1.37)
 - Previous day's Heikin-Ashi trend as daily bias
 - Fixed-fraction sizing is NOT applied in the alert; it reports lot count for a
   theoretical 2% account risk at the default ₹100,000 capital.
@@ -41,11 +46,12 @@ BROKER_CONF = "/Users/vikasreddy/cryptobot/nifty_broker_config.json"
 CACHE = "/Users/vikasreddy/cryptobot/nifty_backtest/cache"
 STATE = "/Users/vikasreddy/cryptobot/nifty_paper_alert_state.json"
 
-ALLOWED_START = dtime(10, 0)
-ALLOWED_END = dtime(14, 30)
+ALLOWED_START = dtime(9, 15)    # entry window start — capture opening volatility
+ALLOWED_END = dtime(10, 0)      # entry window end — only open new trades in first 45 min
+EXIT_MONITOR_END = dtime(15, 30) # keep monitoring exits until market close + buffer
 EMA_PERIOD = 10
-TARGET_PCT = 0.04
-STOP_PCT = 0.05
+TARGET_PCT = 0.06               # 6% target — opening hour moves are big, let winners ride
+STOP_PCT = 0.02                 # 2% stop — cut losers fast in opening noise
 DEFAULT_CAPITAL = 100000.0
 DEFAULT_RISK_PCT = 0.02
 
@@ -266,9 +272,14 @@ def main():
     # Use a one-shot telegram send for the alert; the pool timeout prevents DNS stalls.
     while True:
         now = datetime.now().time()
-        if not (ALLOWED_START <= now <= ALLOWED_END):
+        # Entry window: only OPEN new trades 9:15-10:00.
+        # Exit window: keep monitoring open positions until 15:30 so trades
+        # opened near 10:00 can still hit target/stop after the entry window closes.
+        in_entry_window = ALLOWED_START <= now <= ALLOWED_END
+        in_exit_window = now <= EXIT_MONITOR_END
+        if not in_entry_window and not in_exit_window:
             if not args.once:
-                print("outside trading window", now, flush=True)
+                print("outside market hours", now, flush=True)
             if args.once:
                 break
             time.sleep(60)
@@ -293,10 +304,17 @@ def main():
             if closed:
                 print("paper positions closed:", [t["id"] for t in closed], flush=True)
 
-        # Check for a new signal only if no position is still open.
+        # Check for a new signal only if in entry window and no position is open.
         open_trades = broker.get_positions() if broker else []
         if open_trades:
-            print("open paper trade(s); skipping new signal", flush=True)
+            print("open paper trade(s); monitoring exits only", flush=True)
+            if args.once:
+                break
+            time.sleep(60)
+            continue
+
+        if not in_entry_window:
+            # Past 10:00 — no new entries, just waiting for exits (handled above).
             if args.once:
                 break
             time.sleep(60)
